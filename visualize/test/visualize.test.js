@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { validateConfig, formatSummary, createVisualizeDefinition, DEFAULT_MAX_PREVIEW_BYTES } from '../lib/index.mjs'
+import { validateConfig, formatSummary, createVisualizeDefinition, buildVisualizeSteerMessage, DEFAULT_MAX_PREVIEW_BYTES } from '../lib/index.mjs'
 
 function fakeFs({ html = '<h1>hi</h1>', size, absent = false, notFile = false, chunkSize = 4 }) {
   const emitLog = []
@@ -100,4 +100,11 @@ test('formatSummary: bounded and informative', () => {
   const big = formatSummary({ path: 'out/demo.html', size: 3 * 1024 * 1024, truncated: true, html: '' })
   assert.ok(big.includes('truncated'))
   assert.ok(big.length < 200)
+})
+
+test('buildVisualizeSteerMessage: names the tool and the path', () => {
+  const msg = buildVisualizeSteerMessage('out/demo.html')
+  assert.ok(msg.includes('visualize_html'))
+  assert.ok(msg.includes('out/demo.html'))
+  assert.ok(msg.length < 300)
 })

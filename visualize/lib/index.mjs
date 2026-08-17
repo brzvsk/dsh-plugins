@@ -1,12 +1,14 @@
+import { createUserMessage } from "@deepseek-ai/dsh-llm";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { FsError } from "@deepseek-ai/dsh-fs";
 //#region src/index.ts
 /**
 * dsh-visualize — node half.
 *
-* Registers the `visualize_html` tool: reads an HTML file from the session
-* workspace through `ctx.fs` (the sandbox policy applies), renders a SHORT
-* text summary for the model, and embeds the capped HTML in the durable
+* Registers the `visualize_html` tool, the human-facing `/visualize [path]`
+* command, and the runtime `visualize-html` skill: reads an HTML file from the
+* session workspace through `ctx.fs` (the sandbox policy applies), renders a
+* SHORT text summary for the model, and embeds the capped HTML in the durable
 * `presentationMeta` that the browser card consumes. The HTML never enters
 * model context; the canonical value is execution-local.
 */
@@ -17,12 +19,18 @@ const name = "visualize";
 * Services required by the node half. Exported (not a default-export static)
 * so the loader's module-namespace plugin unwrap reads it — the shipped tool
 * plugins use the same `apply`/`inject`/`name` named-export contract.
+* `commands`/`skills` are injected conditionally (see register* below), so a
+* composition without them still loads the tool.
 */
 const inject = [
 	"tools",
 	"fs",
 	"systemPrompt"
 ];
+/** The model-visible message the `/visualize <path>` command steers to the agent. */
+function buildVisualizeSteerMessage(path) {
+	return `Render the HTML file ${path} as a live preview in the Web UI: call the visualize_html tool, then mention the path as Markdown inline code in your final answer.`;
+}
 function validateConfig(config = {}) {
 	const { maxPreviewBytes = DEFAULT_MAX_PREVIEW_BYTES } = config;
 	for (const key of Object.keys(config)) if (key !== "maxPreviewBytes") throw new Error(`dsh-visualize: unknown config key "${key}"`);
@@ -158,6 +166,54 @@ function createVisualizeDefinition(ctx, config) {
 		}
 	});
 }
+/** Human-facing `/visualize [path]` command: steers a model turn that calls the tool. */
+function registerVisualizeCommand(ctx) {
+	ctx.inject(["commands"], (child) => {
+		child.commands.register({
+			name: "visualize",
+			description: "Render an HTML file as a live preview in the chat",
+			input: { hint: "[path]" },
+			handler: ({ agent, rawInput }) => {
+				const path = rawInput.trim();
+				if (path === "") return {
+					kind: "success",
+					text: "Usage: /visualize <path> — renders the HTML file as a sandboxed preview card, e.g. /visualize out/demo.html"
+				};
+				agent.steer(createUserMessage({
+					content: [{
+						type: "text",
+						text: buildVisualizeSteerMessage(path)
+					}],
+					source: { kind: "user" }
+				}));
+				return {
+					kind: "success",
+					text: `Visualizing ${path}…`
+				};
+			}
+		});
+	});
+}
+/** Runtime skill teaching the model (and the user menu) how to use the tool. */
+function registerVisualizeSkill(ctx) {
+	ctx.inject(["skills"], (child) => {
+		child.skills.register({
+			name: "visualize-html",
+			description: "Render an HTML file as a live preview in the Web chat with the visualize_html tool",
+			whenToUse: "After creating an HTML report, dashboard, mockup, or chart that should be shown to the user inside the Web UI.",
+			content: [
+				"Use the `visualize_html` tool to render an HTML file you created (report, dashboard, mockup, chart) as a live preview inside the Web UI.",
+				"",
+				"- Pass the file path relative to the session workspace, or absolute.",
+				"- The preview is sandboxed (opaque origin): inline scripts run but cannot reach the page, cookies, or storage.",
+				"- Self-contained files (inline CSS/JS) render fully; sibling assets (external stylesheets/images) do NOT load inside the preview — inline everything you want to show.",
+				"- Files larger than the preview cap are truncated; in that case tell the user to use the card's \"Open in browser\" action.",
+				"- After visualizing, mention the file path as Markdown inline code in your final answer.",
+				""
+			].join("\n")
+		});
+	});
+}
 function apply(ctx, config = {}) {
 	const cfg = validateConfig(config);
 	const disposers = [ctx.systemPrompt.section({
@@ -165,9 +221,11 @@ function apply(ctx, config = {}) {
 		order: 112,
 		text: "Use the visualize_html tool to render an HTML file you created (report, dashboard, mockup) as a live preview in the Web UI. Self-contained files (inline CSS/JS) render fully; sibling assets do not load inside the preview. Mention the file path as Markdown inline code in your final answer."
 	}), ctx.tools.register(createVisualizeDefinition(ctx, cfg))];
+	registerVisualizeCommand(ctx);
+	registerVisualizeSkill(ctx);
 	return () => {
 		for (const dispose of disposers) dispose();
 	};
 }
 //#endregion
-export { DEFAULT_MAX_PREVIEW_BYTES, apply, createVisualizeDefinition, formatBytes, formatSummary, inject, name, validateConfig };
+export { DEFAULT_MAX_PREVIEW_BYTES, apply, buildVisualizeSteerMessage, createVisualizeDefinition, formatBytes, formatSummary, inject, name, validateConfig };
