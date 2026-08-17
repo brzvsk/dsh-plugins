@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { validateConfig, formatSummary, createVisualizeDefinition, buildVisualizeSteerMessage, DEFAULT_MAX_PREVIEW_BYTES } from '../lib/index.mjs'
+import { validateConfig, formatSummary, createVisualizeDefinition, buildVisualizeSteerMessage, buildVisualizeCreateMessage, DEFAULT_MAX_PREVIEW_BYTES } from '../lib/index.mjs'
 
 function fakeFs({ html = '<h1>hi</h1>', size, absent = false, notFile = false, chunkSize = 4 }) {
   const emitLog = []
@@ -107,4 +107,11 @@ test('buildVisualizeSteerMessage: names the tool and the path', () => {
   assert.ok(msg.includes('visualize_html'))
   assert.ok(msg.includes('out/demo.html'))
   assert.ok(msg.length < 300)
+})
+
+test('buildVisualizeCreateMessage: asks for a context-useful self-contained visualization', () => {
+  const msg = buildVisualizeCreateMessage()
+  assert.ok(msg.includes('visualize_html'))
+  assert.ok(msg.includes('self-contained'))
+  assert.ok(msg.length < 500)
 })

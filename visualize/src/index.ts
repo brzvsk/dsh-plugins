@@ -72,6 +72,16 @@ export function buildVisualizeSteerMessage(path: string): string {
   return `Render the HTML file ${path} as a live preview in the Web UI: call the visualize_html tool, then mention the path as Markdown inline code in your final answer.`
 }
 
+/** The model-visible message bare `/visualize` steers: create a context-useful visualization. */
+export function buildVisualizeCreateMessage(): string {
+  return [
+    'Create a useful visualization in the current context.',
+    'First think about what is most relevant right now — data, project state, recent files, or the task at hand — and which visualization would actually help.',
+    'Then build it as a self-contained HTML file (inline CSS/JS, no external assets) and render it in the Web UI by calling the visualize_html tool.',
+    'Mention the file path as Markdown inline code in your final answer.',
+  ].join(' ')
+}
+
 export function validateConfig(config: VisualizeConfig = {}): Required<VisualizeConfig> {
   const { maxPreviewBytes = DEFAULT_MAX_PREVIEW_BYTES } = config
   for (const key of Object.keys(config)) {
@@ -210,25 +220,23 @@ function registerVisualizeCommand(ctx: VisualizeServices): void {
   ctx.inject(['commands'], (child) => {
     child.commands.register({
       name: 'visualize',
-      description: 'Render an HTML file as a live preview in the chat',
-      input: { hint: '[path]' },
+      description: 'Create or render an HTML visualization as a live preview in the chat',
+      input: { hint: '[path] (blank = create one)' },
       handler: ({ agent, rawInput }) => {
         const path = rawInput.trim()
-        if (path === '') {
-          return {
-            kind: 'success',
-            text: 'Usage: /visualize <path> — renders the HTML file as a sandboxed preview card, e.g. /visualize out/demo.html',
-          }
-        }
+        const message =
+          path === ''
+            ? buildVisualizeCreateMessage()
+            : buildVisualizeSteerMessage(path)
         agent.steer(
           createUserMessage({
-            content: [{ type: 'text', text: buildVisualizeSteerMessage(path) }],
+            content: [{ type: 'text', text: message }],
             // Host attestation of human authority (same as /plan): the steered
             // message counts as a direct user turn.
             source: { kind: 'user' },
           }),
         )
-        return { kind: 'success', text: `Visualizing ${path}…` }
+        return { kind: 'success', text: path === '' ? 'Creating a visualization…' : `Visualizing ${path}…` }
       },
     })
   })

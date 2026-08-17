@@ -24,7 +24,10 @@ rendered **inside** the conversation.
 
 - `/visualize <path>` — slash command (discovered by the Web command menu):
   steers a user turn that calls `visualize_html`, so the preview card appears
-  in the chat. Bare `/visualize` prints usage.
+  in the chat.
+- Bare `/visualize` (no path) — a request to the model to *create* a
+  visualization: it thinks about what would be useful in the current context,
+  builds it as a self-contained HTML file, and renders it with `visualize_html`.
 - The model also sees the `tool:visualize_html` prompt section and the tool
   schema itself — that guidance is what makes the command work end to end.
 
