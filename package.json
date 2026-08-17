@@ -1,0 +1,11 @@
+{
+  "name": "dsh-plugins",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Out-of-tree plugins for DeepSeek Harness (dsh): each subdirectory is one installable plugin bundle",
+  "packageManager": "pnpm@9.12.3",
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

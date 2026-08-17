@@ -1,0 +1,8 @@
+# dsh-visualize bundle layer: mounts the `visualize_html` tool and the
+# sandboxed HTML preview card in the Web chat. Applied as one insert over the
+# profile root; later profile layers may override the row by id.
+- insert:
+    - id: visualize
+      name: 'dsh-visualize'
+      config:
+        maxPreviewBytes: 262144

@@ -1,0 +1,86 @@
+{
+  "name": "dsh-visualize",
+  "version": "0.1.0",
+  "description": "visualize_html tool + sandboxed HTML preview card for the dsh Web UI (Codex /vizualize analogue)",
+  "type": "module",
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-tool"
+      ]
+    }
+  },
+  "files": [
+    "lib/index.mjs",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown && node scripts/build-client.mjs",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test",
+    "prepack": "pnpm build"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-fs": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-system-prompt": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-locale": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-tool": "^0.1.0-rc.6"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "@deepseek-ai/cordis": { "optional": true },
+    "@deepseek-ai/dsh-tools": { "optional": true },
+    "@deepseek-ai/dsh-fs": { "optional": true },
+    "@deepseek-ai/dsh-system-prompt": { "optional": true },
+    "@deepseek-ai/dsh-client-runtime": { "optional": true },
+    "@deepseek-ai/dsh-client-locale": { "optional": true },
+    "@deepseek-ai/dsh-client-ui-slots": { "optional": true },
+    "@deepseek-ai/dsh-client-ui-tool": { "optional": true }
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.0",
+    "typescript": "^5.8.0",
+    "@types/react": "^18.3.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "html",
+    "preview",
+    "visualize",
+    "web"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brzvsk/dsh-plugins.git",
+    "directory": "visualize"
+  },
+  "homepage": "https://github.com/brzvsk/dsh-plugins"
+}

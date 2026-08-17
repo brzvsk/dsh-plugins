@@ -1,0 +1,3 @@
+# Every subdirectory with a package.json is a plugin bundle.
+packages:
+  - '*'

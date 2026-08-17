@@ -1,0 +1,70 @@
+# dsh-visualize
+
+Out-of-tree DSH (DeepSeek Harness) plugin: the `visualize_html` tool plus a
+sandboxed HTML preview card in the Web chat — a Codex `/vizualize` analogue
+rendered **inside** the conversation.
+
+## What it does
+
+- **Node half** (`src/index.ts`, mounts in the host loader tree): registers the
+  `visualize_html(path)` tool. It resolves the path against the session
+  workspace, reads the file through `ctx.fs` (the profile's sandbox policy
+  applies), shows the model only a short summary, and embeds the capped HTML in
+  the durable `presentationMeta` (`tool/result.meta` → `ToolResultNode.meta`).
+  The HTML never enters model context; the canonical value is execution-local.
+- **Browser half** (`src/client.tsx`, a `dsh.client` dual-face package):
+  registers the `visualize_html` keyed view in the `tool.call.toolview` slot.
+  The settled card renders `meta.html` in an iframe with
+  `sandbox="allow-scripts"` (no `allow-same-origin` → opaque origin: scripts
+  run but cannot reach the page, cookies, storage, or same-origin resources),
+  plus **Open in browser** (existing `host.openPath`) and **Copy HTML**.
+
+## Install (bundle)
+
+The package is a **bundle**: it declares `dsh.bundle.patch` and ships its own
+`cordis.patch.yml`, so `dsh plugin add` registers it as a profile layer
+automatically — no manual patch rows.
+
+```sh
+# from anywhere:
+dsh plugin --profile cockpit add -w link:/absolute/path/to/visualize
+#   (for the published npm package, drop the -w and path:
+#    dsh plugin --profile cockpit add dsh-visualize)
+
+# from inside this checkout:
+dsh plugin --profile cockpit add -w link:.
+```
+
+Then restart the profile (the shipped web surface disables HMR, so profile
+layers are not watched live):
+
+```sh
+dsh --profile cockpit --port 3081
+```
+
+Runtime config (row `visualize`):
+
+```yaml
+config:
+  maxPreviewBytes: 262144   # cap on the HTML embedded in the durable result
+```
+
+## Development
+
+```sh
+pnpm install            # from the repo root (pnpm workspace)
+pnpm --filter dsh-visualize build      # tsdown → lib/index.mjs + lib/client.js
+pnpm --filter dsh-visualize typecheck  # tsc --noEmit
+pnpm --filter dsh-visualize test       # node --test (node half unit tests)
+```
+
+After a rebuild, refresh the browser page — the client bundle is served
+no-cache; a server restart is only needed when the loader tree changes.
+
+## Limitations
+
+- **Sibling assets do not load** — `srcdoc` has no base URL, so relative
+  CSS/images next to the file are not fetched inside the preview; self-contained
+  HTML renders fully. (Deferred: a host RPC to serve sibling assets.)
+- Preview truncation is a hard byte cap; the full file opens via the browser.
+- The card is Web-only (keyed tool view); headless surfaces see the summary text.
