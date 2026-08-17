@@ -6,32 +6,44 @@ so `dsh plugin --profile <name> add <pkg>` registers it as a profile layer autom
 
 ## Plugins
 
-| Plugin | What it does |
-|---|---|
-| [visualize](visualize/) | `visualize_html` tool + sandboxed HTML preview card in the Web chat (Codex `/vizualize` analogue) |
+| Plugin | npm | What it does |
+|---|---|---|
+| [visualize](visualize/) | [dsh-visualize](https://www.npmjs.com/package/dsh-visualize) | `visualize_html` tool + sandboxed HTML preview card in the Web chat (Codex `/vizualize` analogue) |
 
-## Install
+## Install (published npm package)
 
 ```sh
-# local checkout (this repo):
-dsh plugin --profile cockpit add -w link:/path/to/dsh-plugins/visualize
+# the profile is a pnpm workspace root, so -w is required
+dsh plugin --profile <name> add -w dsh-visualize
+```
 
-# published npm package:
-dsh plugin --profile cockpit add dsh-visualize
+Then restart the profile (the shipped web surface disables HMR, so layer changes
+are not picked up live):
 
-# any other profile works the same; profiles must be restarted after layer changes
+```sh
+dsh --profile cockpit --port 3081
+```
+
+## Local development (link, live rebuilds)
+
+```sh
+dsh plugin --profile <name> add -w link:/path/to/dsh-plugins/visualize
+pnpm install           # from the repo root (pnpm workspace)
+pnpm --filter dsh-visualize build     # after edits; refresh the browser page
 ```
 
 ## Adding a new plugin
 
-1. Create `packages/<name>/` … no — create `<name>/` with a `package.json`
-   declaring `"dsh": { "bundle": { "patch": "./cordis.patch.yml" } }` and a
-   `cordis.patch.yml` that inserts your rows (the workspace glob `packages: ['*']`
-   picks it up automatically).
+1. Create `<name>/` with a `package.json` declaring
+   `"dsh": { "bundle": { "patch": "./cordis.patch.yml" } }` and a
+   `cordis.patch.yml` that inserts your rows (the workspace glob
+   `packages: ['*']` picks the directory up automatically).
 2. For a Web UI half, add `dsh.client` (platform `web`, inject list) and an
-   `exports["./client"]` bundle in the `window.__ModuleLoader__.load({ id, factory })`
-   format (see `visualize/scripts/build-client.mjs`).
-3. `pnpm install`, build, test, then `dsh plugin --profile <name> add <pkg>`.
+   `exports["./client"]` bundle in the
+   `window.__ModuleLoader__.load({ id, factory })` format
+   (see `visualize/scripts/build-client.mjs`).
+3. `pnpm install`, build, test, then
+   `dsh plugin --profile <name> add -w <pkg>`.
 
 ## License
 

@@ -19,27 +19,28 @@ rendered **inside** the conversation.
   run but cannot reach the page, cookies, storage, or same-origin resources),
   plus **Open in browser** (existing `host.openPath`) and **Copy HTML**.
 
-## Install (bundle)
+## Install
 
-The package is a **bundle**: it declares `dsh.bundle.patch` and ships its own
-`cordis.patch.yml`, so `dsh plugin add` registers it as a profile layer
-automatically — no manual patch rows.
+Published to npm: [dsh-visualize](https://www.npmjs.com/package/dsh-visualize).
 
 ```sh
-# from anywhere:
-dsh plugin --profile cockpit add -w link:/absolute/path/to/visualize
-#   (for the published npm package, drop the -w and path:
-#    dsh plugin --profile cockpit add dsh-visualize)
-
-# from inside this checkout:
-dsh plugin --profile cockpit add -w link:.
+# the profile is a pnpm workspace root, so -w is required
+dsh plugin --profile <name> add -w dsh-visualize
 ```
 
-Then restart the profile (the shipped web surface disables HMR, so profile
-layers are not watched live):
+The package is a **bundle** — it declares `dsh.bundle.patch` and ships its own
+`cordis.patch.yml`, so `dsh plugin add` registers it as a profile layer
+automatically (no manual patch rows). Then restart the profile (the shipped web
+surface disables HMR, so profile layers are not watched live):
 
 ```sh
-dsh --profile cockpit --port 3081
+dsh --profile <name> --port 3081
+```
+
+Local development checkout (live link, rebuilds picked up on page refresh):
+
+```sh
+dsh plugin --profile <name> add -w link:/path/to/dsh-plugins/visualize
 ```
 
 Runtime config (row `visualize`):
