@@ -1,6 +1,6 @@
 {
   "name": "dsh-visualize",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "visualize_html tool + sandboxed HTML preview card for the dsh Web UI (Codex /vizualize analogue)",
   "type": "module",
   "exports": {
