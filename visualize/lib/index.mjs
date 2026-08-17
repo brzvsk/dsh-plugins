@@ -5,12 +5,12 @@ import { FsError } from "@deepseek-ai/dsh-fs";
 /**
 * dsh-visualize — node half.
 *
-* Registers the `visualize_html` tool, the human-facing `/visualize [path]`
-* command, and the runtime `visualize-html` skill: reads an HTML file from the
-* session workspace through `ctx.fs` (the sandbox policy applies), renders a
-* SHORT text summary for the model, and embeds the capped HTML in the durable
-* `presentationMeta` that the browser card consumes. The HTML never enters
-* model context; the canonical value is execution-local.
+* Registers the `visualize_html` tool and the human-facing `/visualize [path]`
+* command: reads an HTML file from the session workspace through `ctx.fs` (the
+* sandbox policy applies), renders a SHORT text summary for the model, and
+* embeds the capped HTML in the durable `presentationMeta` that the browser
+* card consumes. The HTML never enters model context; the canonical value is
+* execution-local.
 */
 const DEFAULT_MAX_PREVIEW_BYTES = 262144;
 /** Cordis plugin name used by loader diagnostics. */
@@ -194,26 +194,6 @@ function registerVisualizeCommand(ctx) {
 		});
 	});
 }
-/** Runtime skill teaching the model (and the user menu) how to use the tool. */
-function registerVisualizeSkill(ctx) {
-	ctx.inject(["skills"], (child) => {
-		child.skills.register({
-			name: "visualize-html",
-			description: "Render an HTML file as a live preview in the Web chat with the visualize_html tool",
-			whenToUse: "After creating an HTML report, dashboard, mockup, or chart that should be shown to the user inside the Web UI.",
-			content: [
-				"Use the `visualize_html` tool to render an HTML file you created (report, dashboard, mockup, chart) as a live preview inside the Web UI.",
-				"",
-				"- Pass the file path relative to the session workspace, or absolute.",
-				"- The preview is sandboxed (opaque origin): inline scripts run but cannot reach the page, cookies, or storage.",
-				"- Self-contained files (inline CSS/JS) render fully; sibling assets (external stylesheets/images) do NOT load inside the preview — inline everything you want to show.",
-				"- Files larger than the preview cap are truncated; in that case tell the user to use the card's \"Open in browser\" action.",
-				"- After visualizing, mention the file path as Markdown inline code in your final answer.",
-				""
-			].join("\n")
-		});
-	});
-}
 function apply(ctx, config = {}) {
 	const cfg = validateConfig(config);
 	const disposers = [ctx.systemPrompt.section({
@@ -222,7 +202,6 @@ function apply(ctx, config = {}) {
 		text: "Use the visualize_html tool to render an HTML file you created (report, dashboard, mockup) as a live preview in the Web UI. Self-contained files (inline CSS/JS) render fully; sibling assets do not load inside the preview. Mention the file path as Markdown inline code in your final answer."
 	}), ctx.tools.register(createVisualizeDefinition(ctx, cfg))];
 	registerVisualizeCommand(ctx);
-	registerVisualizeSkill(ctx);
 	return () => {
 		for (const dispose of disposers) dispose();
 	};

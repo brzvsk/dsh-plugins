@@ -7,13 +7,12 @@ rendered **inside** the conversation.
 ## What it does
 
 - **Node half** (`src/index.ts`, mounts in the host loader tree): registers the
-  `visualize_html(path)` tool, the human-facing `/visualize [path]` command,
-  and the runtime `visualize-html` skill. It resolves the path against the
-  session workspace, reads the file through `ctx.fs` (the profile's sandbox
-  policy applies), shows the model only a short summary, and embeds the capped
-  HTML in the durable `presentationMeta` (`tool/result.meta` →
-  `ToolResultNode.meta`). The HTML never enters model context; the canonical
-  value is execution-local.
+  `visualize_html(path)` tool and the human-facing `/visualize [path]` command.
+  It resolves the path against the session workspace, reads the file through
+  `ctx.fs` (the profile's sandbox policy applies), shows the model only a short
+  summary, and embeds the capped HTML in the durable `presentationMeta`
+  (`tool/result.meta` → `ToolResultNode.meta`). The HTML never enters model
+  context; the canonical value is execution-local.
 - **Browser half** (`src/client.tsx`, a `dsh.client` dual-face package):
   registers the `visualize_html` keyed view in the `tool.call.toolview` slot.
   The settled card renders `meta.html` in an iframe with
@@ -26,11 +25,8 @@ rendered **inside** the conversation.
 - `/visualize <path>` — slash command (discovered by the Web command menu):
   steers a user turn that calls `visualize_html`, so the preview card appears
   in the chat. Bare `/visualize` prints usage.
-- `visualize-html` — runtime skill (`ctx.skills.register`): appears in the
-  skill menu and is model-invocable; teaches when to use the tool and how to
-  write self-contained HTML for the sandboxed preview.
 - The model also sees the `tool:visualize_html` prompt section and the tool
-  schema itself.
+  schema itself — that guidance is what makes the command work end to end.
 
 ## Install
 
