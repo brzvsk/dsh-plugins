@@ -11,8 +11,6 @@ Each folder is a separate plugin. Install only the ones you want.
 | [Visualize](visualize/) | Interactive HTML previews inside the conversation, with a `/visualize` command | [npm: dsh-visualize](https://www.npmjs.com/package/dsh-visualize), v0.2.1 |
 | [Message Edit](message-edit/) | One pencil button to edit the last user message and replace its reply; follows the interface language | Install from this checkout; tested on DSH 0.1.5-rc.2, with a host compatibility fix described in its README |
 
-[Model Effort](model-effort/) is an experimental, unpublished model/effort selector for an older DSH API. It is kept as source material, not a recommended install.
-
 DSH's plugin APIs change between releases. A successful install does not establish runtime compatibility; check each plugin's README before using it.
 
 ## Install
