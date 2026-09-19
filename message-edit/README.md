@@ -3,6 +3,7 @@
 A minimal local plugin for DeepSeek Harness: edit only the latest user message and send it again. Its old reply is removed from the active conversation; earlier turns are kept. The original session is archived through DSH's existing branch mechanism.
 
 - One pencil button beside Copy, using the native button styling.
+- Edit directly inside the message bubble: Enter sends, Shift+Enter inserts a newline, Escape cancels. Cancel and Send buttons remain available.
 - No header controls, retry buttons, counters, or timeline tab.
 - English, Russian, and Chinese follow the DSH interface locale (English fallback).
 - Stopping an in-flight reply is handled by the inherited edit operation.

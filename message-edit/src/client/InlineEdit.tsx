@@ -10,12 +10,9 @@ import styles from './InlineEdit.module.css'
 import { strings } from './i18n.ts'
 
 const STYLE = {
-  overlay: styles['overlay'] ?? '',
   panel: styles['panel'] ?? '',
-  title: styles['title'] ?? '',
   input: styles['input'] ?? '',
   footer: styles['footer'] ?? '',
-  hint: styles['hint'] ?? '',
   actions: styles['actions'] ?? '',
   iconButton: styles['iconButton'] ?? '',
   save: styles['save'] ?? '',
@@ -38,25 +35,26 @@ function svgIcon(path: string): SVGSVGElement {
   return svg
 }
 
-type OverlayCleanup = () => void
+type EditorCleanup = () => void
 
-function mountEditor(block: EditableMessageBlock, edit: EditResendFace['edit'], close: () => void, language: string): OverlayCleanup {
+function mountEditor(block: EditableMessageBlock, edit: EditResendFace['edit'], close: () => void, language: string, row: HTMLElement): EditorCleanup {
   const text = strings(language)
-  const overlay = document.createElement('div')
-  overlay.className = STYLE.overlay
+  const bubble = row.parentElement?.querySelector<HTMLElement>('[class*="_bubble"]')
+  if (!bubble) return () => {}
+  const stack = bubble.parentElement!
+  const originalBubbleStyle = bubble.style.display
+  const originalStackStyle = stack.getAttribute('style')
+  const originalRowStyle = row.style.display
   const panel = document.createElement('div')
   panel.className = STYLE.panel
-  const title = document.createElement('div')
-  title.className = STYLE.title
-  title.textContent = text.edit
+  panel.setAttribute('role', 'group')
+  panel.setAttribute('aria-label', text.edit)
   const input = document.createElement('textarea')
   input.className = STYLE.input
   input.value = block.text
+  input.setAttribute('aria-label', text.edit)
   const footer = document.createElement('div')
   footer.className = STYLE.footer
-  const hint = document.createElement('span')
-  hint.className = STYLE.hint
-  hint.textContent = text.hint
   const errorEl = document.createElement('p')
   errorEl.className = STYLE.error
   errorEl.hidden = true
@@ -68,11 +66,14 @@ function mountEditor(block: EditableMessageBlock, edit: EditResendFace['edit'], 
   const cancel = document.createElement('button')
   cancel.className = STYLE.cancel
   cancel.textContent = text.cancel
-  actions.append(save, cancel)
-  footer.append(hint, actions)
-  panel.append(title, input, errorEl, footer)
-  overlay.appendChild(panel)
-  document.body.appendChild(overlay)
+  actions.append(cancel, save)
+  footer.append(actions)
+  panel.append(input, errorEl, footer)
+  bubble.style.display = 'none'
+  row.style.display = 'none'
+  stack.style.maxWidth = '100%'
+  stack.style.width = '100%'
+  stack.appendChild(panel)
   // Auto-grow the editor to fit its content (no oversized box for short text).
   const autoSize = (): void => {
     input.style.height = 'auto'
@@ -85,7 +86,7 @@ function mountEditor(block: EditableMessageBlock, edit: EditResendFace['edit'], 
   let mounted = true
   let saving = false
   const saveEdit = (): void => {
-    if (saving) return
+    if (saving || !input.value.trim()) return
     saving = true
     save.disabled = true
     errorEl.hidden = true
@@ -100,24 +101,35 @@ function mountEditor(block: EditableMessageBlock, edit: EditResendFace['edit'], 
     })
   }
   const cancelEdit = (): void => { close() }
-  const dismiss = (event: MouseEvent): void => { if (event.target === overlay) close() }
+  const keydown = (event: KeyboardEvent): void => {
+    if (event.isComposing || event.keyCode === 229) return
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close() }
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault(); event.stopPropagation(); saveEdit()
+    }
+  }
   save.addEventListener('click', saveEdit)
   cancel.addEventListener('click', cancelEdit)
-  overlay.addEventListener('click', dismiss)
+  input.addEventListener('keydown', keydown)
   return () => {
     mounted = false
     save.removeEventListener('click', saveEdit)
     cancel.removeEventListener('click', cancelEdit)
-    overlay.removeEventListener('click', dismiss)
-    overlay.remove()
+    input.removeEventListener('keydown', keydown)
+    input.removeEventListener('input', autoSize)
+    panel.remove()
+    bubble.style.display = originalBubbleStyle
+    row.style.display = originalRowStyle
+    if (originalStackStyle === null) stack.removeAttribute('style')
+    else stack.setAttribute('style', originalStackStyle)
   }
 }
 
-function createOverlayHost(edit: EditResendFace['edit'], language: string): { editBlock(block: EditableMessageBlock): void; dispose(): void } {
-  let active: OverlayCleanup | undefined
-  const editBlock = (block: EditableMessageBlock): void => {
+function createEditorHost(edit: EditResendFace['edit'], language: string): { editBlock(block: EditableMessageBlock, row: HTMLElement): void; dispose(): void } {
+  let active: EditorCleanup | undefined
+  const editBlock = (block: EditableMessageBlock, row: HTMLElement): void => {
     active?.()
-    let cleanup: OverlayCleanup = () => {}
+    let cleanup: EditorCleanup = () => {}
     let mounted = true
     const close = (): void => {
       if (!mounted) return
@@ -127,7 +139,7 @@ function createOverlayHost(edit: EditResendFace['edit'], language: string): { ed
     }
     active = close
     try {
-      cleanup = mountEditor(block, edit, close, language)
+      cleanup = mountEditor(block, edit, close, language, row)
     } catch (error: unknown) {
       active = undefined
       mounted = false
@@ -146,13 +158,18 @@ export function InlineEdit({
 }): null {
   useEffect(() => {
     const cleanups: Array<() => void> = []
-    const overlays = createOverlayHost(edit, language)
+    const editors = createEditorHost(edit, language)
     let observer: MutationObserver | undefined
 
     const sync = (): void => {
       const actionRows = Array.from(document.querySelectorAll<HTMLElement>('[class*="actions"]'))
+      const latestUser = Array.from(document.querySelectorAll('[data-chat-flow-kind="user"]')).at(-1)
       const claimedEvents = new Set<number>()
       for (const row of actionRows.reverse()) {
+        const isLatest = row.closest('[data-chat-flow-kind="user"]') === latestUser
+        const existingEdit = row.querySelector<HTMLButtonElement>('[data-message-edit]')
+        if (existingEdit) existingEdit.hidden = !isLatest
+        if (!isLatest) continue
         const marker = row as HTMLElement & { __editResendInjected?: boolean; __editResendEventSeq?: number }
         if (marker.__editResendInjected === true) {
           if (marker.__editResendEventSeq !== undefined) claimedEvents.add(marker.__editResendEventSeq)
@@ -175,12 +192,15 @@ export function InlineEdit({
 
         const editButton = document.createElement('button')
         editButton.className = STYLE.iconButton
+        editButton.dataset.messageEdit = 'true'
         editButton.setAttribute('aria-label', strings(language).edit)
         editButton.title = strings(language).edit
         editButton.appendChild(svgIcon(EDIT_PATH))
         const editMessage = (): void => {
+          const latest = Array.from(document.querySelectorAll('[data-chat-flow-kind="user"]')).at(-1)
+          if (row.closest('[data-chat-flow-kind="user"]') !== latest) return
           const block = blocks[0]
-          if (block !== undefined) overlays.editBlock(block)
+          if (block !== undefined) editors.editBlock(block, row)
         }
         editButton.addEventListener('click', editMessage)
 
@@ -210,7 +230,7 @@ export function InlineEdit({
 
     return () => {
       observer?.disconnect()
-      overlays.dispose()
+      editors.dispose()
       for (const cleanup of cleanups.reverse()) cleanup()
     }
   }, [messages, edit, language])

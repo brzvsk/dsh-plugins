@@ -349,7 +349,7 @@ window.__ModuleLoader__.load({
 		};
 		//#endregion
 		//#region \0dsh-css:/Users/brzvsk/projects/dsh-plugins/message-edit/src/client/InlineEdit.module.css.mjs
-		const css = ".HYteGG_overlay,.HYteGG_panel,.HYteGG_title,.HYteGG_input,.HYteGG_footer,.HYteGG_hint,.HYteGG_actions,.HYteGG_save,.HYteGG_cancel,.HYteGG_iconButton{box-sizing:border-box}.HYteGG_iconButton{width:24px;height:24px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:6px;justify-content:center;align-items:center;padding:0;display:inline-flex}.HYteGG_iconButton:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.HYteGG_overlay{z-index:1000;background:var(--dsw-alias-bg-mask-1);backdrop-filter:var(--dsw-mask-blur);justify-content:center;align-items:center;padding:24px;display:flex;position:fixed;inset:0}.HYteGG_panel{z-index:1;border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-alias-bg-layer-2);width:min(440px,100%);box-shadow:var(--dsw-shadow-lv3);border-radius:20px;flex-direction:column;gap:14px;padding:20px;display:flex;position:relative}.HYteGG_title{color:var(--dsw-alias-label-primary);margin:0;font-size:15px;font-weight:600;line-height:22px}.HYteGG_input{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-specific-input-major);width:100%;min-height:72px;max-height:360px;color:var(--dsw-alias-label-primary);resize:none;border-radius:12px;padding:10px 12px;font-family:inherit;font-size:14px;line-height:22px;overflow-y:auto}.HYteGG_input:focus{border-color:var(--dsw-alias-state-business-primary);outline:none}.HYteGG_footer{justify-content:space-between;align-items:center;gap:12px;display:flex}.HYteGG_hint{color:var(--dsw-alias-label-caption);font-size:12px;line-height:18px}.HYteGG_actions{flex:none;align-items:center;gap:12px;display:flex}.HYteGG_save,.HYteGG_cancel{cursor:pointer;border-radius:17px;justify-content:center;align-items:center;height:34px;padding:0 16px;font-size:14px;line-height:20px;transition:background .15s;display:inline-flex}.HYteGG_save{background:var(--dsw-alias-button-primary-fill);min-width:92px;color:var(--dsw-alias-label-primary-foreground);border:none}.HYteGG_save:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover)}.HYteGG_save:disabled{opacity:.4;cursor:not-allowed}.HYteGG_cancel{border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary);background:0 0}.HYteGG_cancel:hover{background:var(--dsw-alias-interactive-bg-hover)}.HYteGG_error{background:var(--dsw-alias-interactive-bg-hover-danger);color:var(--dsw-alias-state-error-primary);border-radius:8px;margin:0;padding:8px 10px;font-size:12px;line-height:18px}";
+		const css = ".HYteGG_panel,.HYteGG_input,.HYteGG_footer,.HYteGG_actions,.HYteGG_save,.HYteGG_cancel,.HYteGG_iconButton{box-sizing:border-box}.HYteGG_iconButton{width:24px;height:24px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:6px;justify-content:center;align-items:center;padding:0;display:inline-flex}.HYteGG_iconButton:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.HYteGG_panel{background:var(--dsw-specific-bubble);width:100%;color:var(--dsw-alias-label-primary);border-radius:22px;flex-direction:column;gap:12px;padding:14px 16px;display:flex}.HYteGG_input{width:100%;min-height:44px;max-height:360px;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:var(--dsh-content-font-size,14px);line-height:calc(22px + var(--dsh-content-font-delta,0px));resize:none;background:0 0;border:none;border-radius:0;padding:0;overflow-y:auto}.HYteGG_input:focus{border-color:var(--dsw-alias-state-business-primary);outline:none}.HYteGG_footer{justify-content:flex-end;align-items:center;gap:12px;display:flex}.HYteGG_hint{color:var(--dsw-alias-label-caption);font-size:12px;line-height:18px}.HYteGG_actions{flex:none;align-items:center;gap:12px;display:flex}.HYteGG_save,.HYteGG_cancel{cursor:pointer;border-radius:17px;justify-content:center;align-items:center;height:34px;padding:0 16px;font-size:14px;line-height:20px;transition:background .15s;display:inline-flex}.HYteGG_save{background:var(--dsw-alias-button-primary-fill);min-width:92px;color:var(--dsw-alias-label-primary-foreground);border:none}.HYteGG_save:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover)}.HYteGG_save:disabled{opacity:.4;cursor:not-allowed}.HYteGG_cancel{border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary);background:0 0}.HYteGG_cancel:hover{background:var(--dsw-alias-interactive-bg-hover)}.HYteGG_error{background:var(--dsw-alias-interactive-bg-hover-danger);color:var(--dsw-alias-state-error-primary);border-radius:8px;margin:0;padding:8px 10px;font-size:12px;line-height:18px}";
 		const tagId = "dsh-message-edit-local/InlineEdit.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
@@ -359,17 +359,15 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var InlineEdit_module_css_default = {
-			"actions": "HYteGG_actions",
-			"input": "HYteGG_input",
-			"title": "HYteGG_title",
-			"overlay": "HYteGG_overlay",
 			"panel": "HYteGG_panel",
-			"footer": "HYteGG_footer",
 			"hint": "HYteGG_hint",
-			"save": "HYteGG_save",
 			"iconButton": "HYteGG_iconButton",
-			"error": "HYteGG_error",
-			"cancel": "HYteGG_cancel"
+			"actions": "HYteGG_actions",
+			"footer": "HYteGG_footer",
+			"input": "HYteGG_input",
+			"save": "HYteGG_save",
+			"cancel": "HYteGG_cancel",
+			"error": "HYteGG_error"
 		};
 		//#endregion
 		//#region src/client/i18n.ts
@@ -384,14 +382,14 @@ window.__ModuleLoader__.load({
 			en: {
 				edit: "Edit last message",
 				hint: "The reply after this message will be replaced.",
-				send: "Send again",
+				send: "Send",
 				cancel: "Cancel",
 				error: "Could not send. Please try again."
 			},
 			ru: {
 				edit: "Редактировать последнее сообщение",
 				hint: "Ответ после этого сообщения будет заменён.",
-				send: "Отправить заново",
+				send: "Отправить",
 				cancel: "Отмена",
 				error: "Не удалось отправить. Попробуйте ещё раз."
 			},
@@ -414,12 +412,9 @@ window.__ModuleLoader__.load({
 		* because the official MessageIconActions exposes no plugin slot.
 		*/
 		const STYLE = {
-			overlay: InlineEdit_module_css_default["overlay"] ?? "",
 			panel: InlineEdit_module_css_default["panel"] ?? "",
-			title: InlineEdit_module_css_default["title"] ?? "",
 			input: InlineEdit_module_css_default["input"] ?? "",
 			footer: InlineEdit_module_css_default["footer"] ?? "",
-			hint: InlineEdit_module_css_default["hint"] ?? "",
 			actions: InlineEdit_module_css_default["actions"] ?? "",
 			iconButton: InlineEdit_module_css_default["iconButton"] ?? "",
 			save: InlineEdit_module_css_default["save"] ?? "",
@@ -439,23 +434,24 @@ window.__ModuleLoader__.load({
 			svg.appendChild(p);
 			return svg;
 		}
-		function mountEditor(block, edit, close, language) {
+		function mountEditor(block, edit, close, language, row) {
 			const text = strings(language);
-			const overlay = document.createElement("div");
-			overlay.className = STYLE.overlay;
+			const bubble = row.parentElement?.querySelector("[class*=\"_bubble\"]");
+			if (!bubble) return () => {};
+			const stack = bubble.parentElement;
+			const originalBubbleStyle = bubble.style.display;
+			const originalStackStyle = stack.getAttribute("style");
+			const originalRowStyle = row.style.display;
 			const panel = document.createElement("div");
 			panel.className = STYLE.panel;
-			const title = document.createElement("div");
-			title.className = STYLE.title;
-			title.textContent = text.edit;
+			panel.setAttribute("role", "group");
+			panel.setAttribute("aria-label", text.edit);
 			const input = document.createElement("textarea");
 			input.className = STYLE.input;
 			input.value = block.text;
+			input.setAttribute("aria-label", text.edit);
 			const footer = document.createElement("div");
 			footer.className = STYLE.footer;
-			const hint = document.createElement("span");
-			hint.className = STYLE.hint;
-			hint.textContent = text.hint;
 			const errorEl = document.createElement("p");
 			errorEl.className = STYLE.error;
 			errorEl.hidden = true;
@@ -467,11 +463,14 @@ window.__ModuleLoader__.load({
 			const cancel = document.createElement("button");
 			cancel.className = STYLE.cancel;
 			cancel.textContent = text.cancel;
-			actions.append(save, cancel);
-			footer.append(hint, actions);
-			panel.append(title, input, errorEl, footer);
-			overlay.appendChild(panel);
-			document.body.appendChild(overlay);
+			actions.append(cancel, save);
+			footer.append(actions);
+			panel.append(input, errorEl, footer);
+			bubble.style.display = "none";
+			row.style.display = "none";
+			stack.style.maxWidth = "100%";
+			stack.style.width = "100%";
+			stack.appendChild(panel);
 			const autoSize = () => {
 				input.style.height = "auto";
 				input.style.height = Math.min(input.scrollHeight, 360) + "px";
@@ -483,7 +482,7 @@ window.__ModuleLoader__.load({
 			let mounted = true;
 			let saving = false;
 			const saveEdit = () => {
-				if (saving) return;
+				if (saving || !input.value.trim()) return;
 				saving = true;
 				save.disabled = true;
 				errorEl.hidden = true;
@@ -503,23 +502,38 @@ window.__ModuleLoader__.load({
 			const cancelEdit = () => {
 				close();
 			};
-			const dismiss = (event) => {
-				if (event.target === overlay) close();
+			const keydown = (event) => {
+				if (event.isComposing || event.keyCode === 229) return;
+				if (event.key === "Escape") {
+					event.preventDefault();
+					event.stopPropagation();
+					close();
+				}
+				if (event.key === "Enter" && !event.shiftKey) {
+					event.preventDefault();
+					event.stopPropagation();
+					saveEdit();
+				}
 			};
 			save.addEventListener("click", saveEdit);
 			cancel.addEventListener("click", cancelEdit);
-			overlay.addEventListener("click", dismiss);
+			input.addEventListener("keydown", keydown);
 			return () => {
 				mounted = false;
 				save.removeEventListener("click", saveEdit);
 				cancel.removeEventListener("click", cancelEdit);
-				overlay.removeEventListener("click", dismiss);
-				overlay.remove();
+				input.removeEventListener("keydown", keydown);
+				input.removeEventListener("input", autoSize);
+				panel.remove();
+				bubble.style.display = originalBubbleStyle;
+				row.style.display = originalRowStyle;
+				if (originalStackStyle === null) stack.removeAttribute("style");
+				else stack.setAttribute("style", originalStackStyle);
 			};
 		}
-		function createOverlayHost(edit, language) {
+		function createEditorHost(edit, language) {
 			let active;
-			const editBlock = (block) => {
+			const editBlock = (block, row) => {
 				active?.();
 				let cleanup = () => {};
 				let mounted = true;
@@ -531,7 +545,7 @@ window.__ModuleLoader__.load({
 				};
 				active = close;
 				try {
-					cleanup = mountEditor(block, edit, close, language);
+					cleanup = mountEditor(block, edit, close, language, row);
 				} catch (error) {
 					active = void 0;
 					mounted = false;
@@ -548,12 +562,17 @@ window.__ModuleLoader__.load({
 		function InlineEdit({ messages, edit, language }) {
 			(0, react.useEffect)(() => {
 				const cleanups = [];
-				const overlays = createOverlayHost(edit, language);
+				const editors = createEditorHost(edit, language);
 				let observer;
 				const sync = () => {
 					const actionRows = Array.from(document.querySelectorAll("[class*=\"actions\"]"));
+					const latestUser = Array.from(document.querySelectorAll("[data-chat-flow-kind=\"user\"]")).at(-1);
 					const claimedEvents = /* @__PURE__ */ new Set();
 					for (const row of actionRows.reverse()) {
+						const isLatest = row.closest("[data-chat-flow-kind=\"user\"]") === latestUser;
+						const existingEdit = row.querySelector("[data-message-edit]");
+						if (existingEdit) existingEdit.hidden = !isLatest;
+						if (!isLatest) continue;
 						const marker = row;
 						if (marker.__editResendInjected === true) {
 							if (marker.__editResendEventSeq !== void 0) claimedEvents.add(marker.__editResendEventSeq);
@@ -572,12 +591,15 @@ window.__ModuleLoader__.load({
 						claimedEvents.add(eventSeq);
 						const editButton = document.createElement("button");
 						editButton.className = STYLE.iconButton;
+						editButton.dataset.messageEdit = "true";
 						editButton.setAttribute("aria-label", strings(language).edit);
 						editButton.title = strings(language).edit;
 						editButton.appendChild(svgIcon(EDIT_PATH));
 						const editMessage = () => {
+							const latest = Array.from(document.querySelectorAll("[data-chat-flow-kind=\"user\"]")).at(-1);
+							if (row.closest("[data-chat-flow-kind=\"user\"]") !== latest) return;
 							const block = blocks[0];
-							if (block !== void 0) overlays.editBlock(block);
+							if (block !== void 0) editors.editBlock(block, row);
 						};
 						editButton.addEventListener("click", editMessage);
 						const lastOfficial = Array.from(row.querySelectorAll("button")).filter((button) => button !== editButton).at(-1);
@@ -602,7 +624,7 @@ window.__ModuleLoader__.load({
 				});
 				return () => {
 					observer?.disconnect();
-					overlays.dispose();
+					editors.dispose();
 					for (const cleanup of cleanups.reverse()) cleanup();
 				};
 			}, [
