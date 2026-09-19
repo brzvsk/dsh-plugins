@@ -50,41 +50,17 @@ const openPlan = planOperation({
 assert.strictEqual(openPlan.boundary, 3, 'open-tail edit boundary is before turn 2')
 assert.strictEqual(openPlan.queuedUsers.length, 1, 'open-tail edit queues exactly the edited message')
 assert.ok(openPlan.queuedUsers[0]?.content[0] && (openPlan.queuedUsers[0].content[0] as { text?: string }).text === 'EDITED second question')
-assert.strictEqual(openPlan.version.effect.operation, 'edit')
-console.log('edit(open tail): OK  boundary=3 queued=1 text=edited')
-
-// 2) edit the CLOSED turn user message -> boundary = turn1.startSeq - 1 = -1, truncate
-const closedPlan = planOperation({
-  action: 'edit', sessionId: 's-src', eventSeq: 1, blockIndex: 0, text: 'EDITED first', cascade: 'truncate',
-}, events)
-assert.strictEqual(closedPlan.boundary, -1, 'closed-turn edit boundary is -1 (empty seed)')
-assert.strictEqual(closedPlan.queuedUsers.length, 1)
-console.log('edit(closed turn): OK  boundary=-1 queued=1')
-
-// 3) reroll -> targets last closed assistant (turn 1), boundary -1
-const reroll = planOperation({ action: 'reroll', sessionId: 's-src' }, events)
-assert.strictEqual(reroll.boundary, -1)
-assert.strictEqual(reroll.version.effect.operation, 'reroll')
-assert.strictEqual(reroll.queuedUsers.length, 1)
-assert.ok((reroll.queuedUsers[0]?.content[0] as { text?: string }).text === 'first question')
-console.log('reroll: OK  boundary=-1 target=last-closed')
-
-// 4) retry the OPEN tail turn -> boundary 3
-const retryOpen = planOperation({ action: 'retry', sessionId: 's-src', turn: 2, cascade: 'truncate' }, events)
-assert.strictEqual(retryOpen.boundary, 3)
-assert.strictEqual(retryOpen.queuedUsers.length, 1)
-console.log('retry(open tail): OK  boundary=3')
-
-// 5) retry the closed turn -> boundary -1
-const retryClosed = planOperation({ action: 'retry', sessionId: 's-src', turn: 1, cascade: 'truncate' }, events)
-assert.strictEqual(retryClosed.boundary, -1)
-console.log('retry(closed): OK  boundary=-1')
-
-// 6) edit with preserve on a closed turn keeps downstream users (none here -> empty)
-const preserve = planOperation({
-  action: 'edit', sessionId: 's-src', eventSeq: 1, blockIndex: 0, text: 'x', cascade: 'preserve',
-}, events)
-assert.strictEqual(preserve.queuedUsers.length, 1, 'preserve with no later users queues only edited')
-console.log('edit(closed preserve): OK')
-
-console.log('ALL LOGIC TESTS PASSED')
+// Last closed turn remains editable; stale earlier targets are rejected.
+const edit = (eventSeq: number, text = 'edited', blockIndex = 0) => ({ action: 'edit' as const, sessionId: 's-src', eventSeq, blockIndex, text, cascade: 'truncate' as const })
+assert.throws(() => planOperation(edit(1), events), /last message changed/)
+const closedPlan = planOperation(edit(1), events.slice(0, 4))
+assert.strictEqual(closedPlan.boundary, -1)
+assert.throws(() => planOperation(edit(5, '  '), events), /empty/)
+assert.throws(() => planOperation(edit(5, 'x', 9), events), /Only user text/)
+assert.throws(() => planOperation({ ...edit(5), action: 'retry' } as any, events), /Only last-message/)
+const withAttachment = structuredClone(events)
+;(withAttachment[5]!.data as any).content.push({ type: 'image', data: 'fixture', mimeType: 'image/png' })
+const attachmentPlan = planOperation(edit(5), withAttachment)
+assert.deepStrictEqual(attachmentPlan.queuedUsers[0]!.content[1], (withAttachment[5]!.data as any).content[1])
+assert.notStrictEqual(attachmentPlan.queuedUsers[0]!.content[1], (withAttachment[5]!.data as any).content[1])
+console.log('Last-message boundaries, stale targets, empty text and attachments: OK')

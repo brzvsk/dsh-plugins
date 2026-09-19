@@ -1,0 +1,36 @@
+import {createRequire} from 'node:module';
+import {pathToFileURL} from 'node:url';
+const requireHost=createRequire(process.env.DSH_TEST_PACKAGE_JSON ?? new URL('../package.json',import.meta.url));
+const host=async name => import(pathToFileURL(requireHost.resolve('@deepseek-ai/'+name)).href);
+const {Context}=await host('cordis');
+const {Session,SessionStore,SessionLogOffset}=await host('dsh-session');
+const {default:Persistence}=await host('dsh-session-persistence-jsonl');
+const {SessionQueryEngine}=await host('dsh-session-query');
+const {readEvents}=await import('../src/host.ts');
+import {mkdtemp, rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import assert from 'node:assert/strict';
+const root=await mkdtemp(join(tmpdir(),'dsh-edit-persistence-'));
+function context(){const ctx=new Context();new SessionStore(ctx);new Persistence(ctx,{root});new SessionQueryEngine(ctx);return ctx;}
+const ctx=context();
+const source=Session.create('source');
+source.append('turn/start',{turn:1});
+source.append('user/message',{id:'u1',role:'user',content:[{type:'text',text:'keep'}],source:{kind:'user'}},{surfaceOp:'append'});
+source.append('turn/end',{turn:1,reason:{kind:'completed'}});
+const prefix=source.snapshotEvents();
+const child=Session.create('edited',prefix,{...source.header,id:'edited',isSeeded:true,parentSession:'source'},SessionLogOffset(prefix.length));
+child.append('turn/start',{turn:2});
+child.append('user/message',{id:'u2',role:'user',content:[{type:'text',text:'edited'}],source:{kind:'user'}},{surfaceOp:'append'});
+child.append('turn/end',{turn:2,reason:{kind:'completed'}});
+const handle=await ctx.sessionPersistence.create(child.header,{inheritedEventCount:child.inheritedEventCount});
+await handle.append(child.snapshotEvents());await handle.flush();await handle.close();
+const fresh=context();
+await new Promise(resolve=>setTimeout(resolve,50));
+// This test must not call or require a patched readSession.
+fresh.sessionQuery.readSession=()=>{throw new Error('Forbidden legacy readSession path')};
+const restored=await readEvents(fresh,'edited');
+assert.deepEqual(restored.filter(e=>e.type==='user/message').map(e=>e.data.content[0].text),['keep','edited']);
+await rm(root,{recursive:true,force:true});
+console.log('Cold read through plugin restored persisted fork with earlier and edited user messages: PASS');
+process.exit(0);

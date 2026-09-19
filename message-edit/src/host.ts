@@ -1,35 +1,12 @@
-/**
- * Host half of Edit & Resend: turn-atomic forks, structurally reversible
- * versions, and open-tail (in-flight) editing. Unlike the upstream
- * dsh-message-edit, version metadata is stored OUTSIDE the append-only session
- * log (a JSON file under DSH_HOME), so no custom session event type is ever
- * written and sessions remain resumable after a host restart.
- */
+/** Last-user-message editing through native session forks; no version store. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentHandle, AgentOptions, AgentSetup } from '@deepseek-ai/dsh-agent'
-import type {
-  SessionId, Session, SessionEvent, SessionEventType, SurfaceEventType, SurfaceIntent,
-} from '@deepseek-ai/dsh-session'
+import type { SessionId, Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import { SessionLogOffset } from '@deepseek-ai/dsh-session'
-import type { SessionLineageNode, SessionRecord, SessionLogSnapshot } from '@deepseek-ai/dsh-session-query'
-import type { AssistantMessage, ContentBlock, UserMessage } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, UserMessage } from '@deepseek-ai/dsh-llm'
+import type {} from '@deepseek-ai/dsh-session-query'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
-import {
-  EDIT_RESEND_PATH, VIEW_ORDER,
-  type CascadePolicy, type EditOperation, type EditableBlockKind, type EditableMessageBlock,
-  type EditResendOperation, type EditResendOperationResult, type EditResendTimeline,
-  type RetryableTurn, type VersionEffect, type VersionRecord, type VersionSummary,
-} from './shared.ts'
-
-export { EDIT_RESEND_PATH, VIEW_ORDER } from './shared.ts'
-export type {
-  CascadePolicy, EditOperation, EditableBlockKind, EditableMessageBlock,
-  EditResendOperation, EditResendOperationResult, EditResendTimeline,
-  RetryableTurn, VersionEffect, VersionOperation, VersionRecord, VersionSummary,
-} from './shared.ts'
+import { EDIT_RESEND_PATH, type CascadePolicy, type EditableMessageBlock, type EditResendOperation, type EditResendOperationResult, type EditResendTimeline } from './shared.ts'
 
 // ── HTTP server surface (rc.5 dsh-host-webserver contract) ──────────────────
 interface HttpRequestLike {
@@ -62,7 +39,7 @@ declare module '@deepseek-ai/cordis' {
 /** Stable Cordis plugin name. */
 export const name = 'edit-resend'
 
-/** Public services used by the branch transaction and timeline projection. */
+/** Public services used by the edit transaction and last-message projection. */
 export const inject = ['sessions', 'agents', 'sessionQuery', 'workspaceRegistry', 'webServer']
 
 type UserEvent = SessionEvent<'user/message'>
@@ -83,38 +60,10 @@ interface OpenTail {
   assistants: AssistantEvent[]
 }
 
-interface ManualAssistantTurn {
-  turn: number
-  user: UserMessage
-  assistant: AssistantMessage
-}
-
-interface OperationPlan {
-  boundary: number
-  version: VersionRecord
-  manualTurn?: ManualAssistantTurn
-  queuedUsers: UserMessage[]
-}
-
-type VersionEffectDraft = Omit<VersionEffect, 'id'>
-
-function pairVersionEffect(sourceSessionId: string, effect: VersionEffectDraft): VersionRecord {
-  return {
-    effect: { ...effect, id: crypto.randomUUID() },
-    inverseSessionId: sourceSessionId,
-    time: Date.now(),
-  }
-}
+interface OperationPlan { boundary: number; queuedUsers: UserMessage[] }
 
 function isTextualBlock(block: ContentBlock | undefined): block is Extract<ContentBlock, { type: 'text' | 'reasoning' }> {
   return block?.type === 'text' || block?.type === 'reasoning'
-}
-
-function userText(message: UserMessage): string {
-  return message.content
-    .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
-    .map(block => block.text)
-    .join('\n')
 }
 
 function cloneUser(message: UserMessage, content: ContentBlock[] = structuredClone(message.content)): UserMessage {
@@ -183,211 +132,31 @@ function editableMessages(closed: readonly ClosedTurn[], open?: OpenTail): Edita
       })
     }
   }
-  const pushAssistant = (event: AssistantEvent, openFlag: boolean): void => {
-    for (const [blockIndex, block] of event.data.message.content.entries()) {
-      if (!isTextualBlock(block)) continue
-      result.push({
-        key: String(event.seq) + ':' + String(blockIndex),
-        turn: event.data.turn,
-        eventSeq: event.seq,
-        blockIndex,
-        kind: block.type === 'reasoning' ? 'assistant.reasoning' : 'assistant.response',
-        text: block.text,
-        time: event.time,
-        ...(openFlag ? { open: true } : {}),
-      })
-    }
-  }
   for (const turn of closed) {
     if (turn.user !== undefined) pushUser(turn.user, turn.turn, false)
-    for (const event of turn.assistants) pushAssistant(event, false)
   }
   if (open !== undefined) {
     if (open.user !== undefined) pushUser(open.user, open.turn, true)
-    for (const event of open.assistants) pushAssistant(event, true)
   }
   return result
 }
 
-function retryableTurns(closed: readonly ClosedTurn[], open?: OpenTail): RetryableTurn[] {
-  const base = closed.flatMap((turn): RetryableTurn[] => turn.user === undefined ? [] : [{
-    turn: turn.turn,
-    userEventSeq: turn.user.seq,
-    preview: userText(turn.user.data),
-    time: turn.user.time,
-  }])
-  if (open?.user !== undefined) {
-    base.push({
-      turn: open.turn,
-      userEventSeq: open.user.seq,
-      preview: userText(open.user.data),
-      time: open.user.time,
-      open: true,
-    })
-  }
-  return base
-}
-
-function downstreamUsers(closed: readonly ClosedTurn[], start: number): UserMessage[] {
-  return closed.slice(start).flatMap((turn): UserMessage[] => turn.user === undefined
-    ? []
-    : [cloneUser(turn.user.data)])
-}
-
-function assistantReplacement(event: AssistantEvent, blockIndex: number, text: string): AssistantMessage {
-  const replaced = replaceTextBlock(event.data.message.content, blockIndex, text)
-    .filter(block => block.type === 'text' || block.type === 'reasoning')
-  return Object.freeze({
-    id: crypto.randomUUID(),
-    role: 'assistant' as const,
-    content: Object.freeze(replaced),
-    source: Object.freeze({
-      kind: 'model' as const,
-      provider: event.data.message.source.provider,
-      model: event.data.message.source.model,
-    }),
-  }) as AssistantMessage
-}
-
-function editPlan(operation: EditOperation, closed: readonly ClosedTurn[], open?: OpenTail): OperationPlan {
-  // Prefer the open tail (the just-sent, possibly in-flight message).
-  if (open !== undefined && open.user !== undefined && open.user.seq === operation.eventSeq) {
-    const turn = open
-    const user = open.user
-    const before = user.data.content[operation.blockIndex]
-    if (before?.type !== 'text') throw new Error('所选用户消息块不是文本。')
-    const edited = cloneUser(user.data, replaceTextBlock(user.data.content, operation.blockIndex, operation.text))
-    return {
-      boundary: turn.startSeq - 1,
-      version: pairVersionEffect(operation.sessionId, {
-        operation: 'edit',
-        cascade: 'truncate',
-        targetTurn: turn.turn,
-        targetEventSeq: user.seq,
-        targetBlockIndex: operation.blockIndex,
-        blockKind: 'user',
-        before: before.text,
-        after: operation.text,
-      }),
-      queuedUsers: [edited],
-    }
-  }
-
-  const turnIndex = closed.findIndex(turn => operation.eventSeq > turn.startSeq && operation.eventSeq < turn.endSeq)
-  const turn = closed[turnIndex]
-  if (turn === undefined) throw new Error('所选消息不属于已落定回合。')
-  const event = turn.user?.seq === operation.eventSeq
-    ? turn.user
-    : turn.assistants.find(candidate => candidate.seq === operation.eventSeq)
-  if (event === undefined) throw new Error('所选消息不存在或不可编辑。')
-
-  if (event.type === 'user/message') {
-    const before = event.data.content[operation.blockIndex]
-    if (before?.type !== 'text') throw new Error('所选用户消息块不是文本。')
-    const edited = cloneUser(event.data, replaceTextBlock(event.data.content, operation.blockIndex, operation.text))
-    const later = operation.cascade === 'preserve' ? downstreamUsers(closed, turnIndex + 1) : []
-    return {
-      boundary: turn.startSeq - 1,
-      version: pairVersionEffect(operation.sessionId, {
-        operation: 'edit',
-        cascade: operation.cascade,
-        targetTurn: turn.turn,
-        targetEventSeq: event.seq,
-        targetBlockIndex: operation.blockIndex,
-        blockKind: 'user',
-        before: before.text,
-        after: operation.text,
-      }),
-      queuedUsers: [edited, ...later],
-    }
-  }
-
-  const before = event.data.message.content[operation.blockIndex]
-  if (!isTextualBlock(before)) throw new Error('所选助手消息块不是文本或思考。')
-  const blockKind: EditableBlockKind = before.type === 'reasoning' ? 'assistant.reasoning' : 'assistant.response'
-  if (turn.user === undefined) throw new Error('所选助手消息没有可重建的用户输入。')
-  return {
-    boundary: turn.startSeq - 1,
-    version: pairVersionEffect(operation.sessionId, {
-      operation: 'edit',
-      cascade: operation.cascade,
-      targetTurn: turn.turn,
-      targetEventSeq: event.seq,
-      targetBlockIndex: operation.blockIndex,
-      blockKind,
-      before: before.text,
-      after: operation.text,
-    }),
-    manualTurn: {
-      turn: turn.turn,
-      user: cloneUser(turn.user.data),
-      assistant: assistantReplacement(event, operation.blockIndex, operation.text),
-    },
-    queuedUsers: operation.cascade === 'preserve' ? downstreamUsers(closed, turnIndex + 1) : [],
-  }
-}
-
-function retryPlan(
-  sessionId: string, turnNumber: number, cascade: CascadePolicy,
-  closed: readonly ClosedTurn[], open?: OpenTail,
-): OperationPlan {
-  if (open?.turn === turnNumber && open.user !== undefined) {
-    return {
-      boundary: open.startSeq - 1,
-      version: pairVersionEffect(sessionId, {
-        operation: 'retry',
-        cascade: 'truncate',
-        targetTurn: open.turn,
-        targetEventSeq: open.user.seq,
-      }),
-      queuedUsers: [cloneUser(open.user.data)],
-    }
-  }
-  const turnIndex = closed.findIndex(turn => turn.turn === turnNumber)
-  const turn = closed[turnIndex]
-  if (turn?.user === undefined) throw new Error('所选回合没有可重放的用户输入。')
-  return {
-    boundary: turn.startSeq - 1,
-    version: pairVersionEffect(sessionId, {
-      operation: 'retry',
-      cascade,
-      targetTurn: turn.turn,
-      targetEventSeq: turn.user.seq,
-    }),
-    queuedUsers: cascade === 'preserve' ? downstreamUsers(closed, turnIndex) : [cloneUser(turn.user.data)],
-  }
-}
-
-function rerollPlan(sessionId: string, closed: readonly ClosedTurn[]): OperationPlan {
-  for (let index = closed.length - 1; index >= 0; index -= 1) {
-    const turn = closed[index]
-    if (turn?.user === undefined) continue
-    const target = turn.assistants.findLast(event => event.data.message.content.some(isTextualBlock))
-    if (target === undefined) continue
-    return {
-      boundary: turn.startSeq - 1,
-      version: pairVersionEffect(sessionId, {
-        operation: 'reroll',
-        cascade: 'truncate',
-        targetTurn: turn.turn,
-        targetEventSeq: target.seq,
-      }),
-      queuedUsers: [cloneUser(turn.user.data)],
-    }
-  }
-  throw new Error('当前会话没有可重生成的已落定助手回复。')
-}
-
+/** Reject stale targets on the server, not merely by hiding their buttons. */
 export function planOperation(operation: EditResendOperation, events: readonly SessionEvent[]): OperationPlan {
+  if (operation.action !== 'edit' || operation.cascade !== 'truncate') throw new TypeError('Only last-message editing is supported.')
   const { closed, open } = foldTurns(events)
-  switch (operation.action) {
-    case 'edit':
-      return editPlan(operation, closed, open)
-    case 'reroll':
-      return rerollPlan(operation.sessionId, closed)
-    case 'retry':
-      return retryPlan(operation.sessionId, operation.turn, operation.cascade, closed, open)
-  }
+  const latest = [...closed, ...(open ? [open] : [])].findLast(turn => turn.user !== undefined)
+  if (!latest?.user || latest.user.seq !== operation.eventSeq) throw new TypeError('The last message changed. Reopen the editor.')
+  if (!operation.text.trim()) throw new TypeError('Message cannot be empty.')
+  if (latest.user.data.content[operation.blockIndex]?.type !== 'text') throw new TypeError('Only user text can be edited.')
+  return { boundary: latest.startSeq - 1, queuedUsers: [cloneUser(latest.user.data, replaceTextBlock(latest.user.data.content, operation.blockIndex, operation.text))] }
+}
+
+/** Public read lease supports both live and persisted seeded sessions. */
+export async function readEvents(ctx: Context, sessionId: SessionId): Promise<SessionEvent[]> {
+  const observation = await ctx.sessionQuery.observeSession(sessionId, { projectionMode: 'none' })
+  try { return structuredClone([...observation.events]) }
+  finally { observation[Symbol.dispose]() }
 }
 
 function agentOptions(events: readonly SessionEvent[], fallback?: AgentOptions): AgentOptions {
@@ -401,45 +170,28 @@ function agentOptions(events: readonly SessionEvent[], fallback?: AgentOptions):
   return { provider, model, ...(maxTokens === undefined ? {} : { maxTokens }) }
 }
 
-/** Whether the version operation targets the still-open (in-flight or aborted) tail turn. */
-function targetsOpenTail(operation: EditResendOperation, events: readonly SessionEvent[]): boolean {
-  const { open } = foldTurns(events)
-  if (open === undefined) return false
-  if (operation.action === 'edit') return open.user?.seq === operation.eventSeq
-  if (operation.action === 'retry') return operation.turn === open.turn
-  return false
-}
-
 async function withSourceAgent<T>(
   ctx: Context, sessionId: SessionId, operation: EditResendOperation, job: (agent: Agent) => Promise<T>,
 ): Promise<T> {
   let handle: AgentHandle | undefined
   let agent = ctx.agents.get(sessionId)
   if (agent === undefined) {
-    const snapshot = await ctx.sessionQuery.readSession(sessionId)
+    const events = await readEvents(ctx, sessionId)
     handle = await ctx.agents.resume({
       resumeSessionId: sessionId,
-      agentOptions: agentOptions(snapshot.events),
+      agentOptions: agentOptions(events),
     })
     agent = handle.agent
   }
   try {
+    planOperation(operation, agent.session.snapshotEvents())
     if (agent.status === 'idle') {
       return await agent.runMaintenance(async () => job(agent))
     }
-    // The driver owns the agent. An open-tail target is the "stop the in-flight
-    // reply and regenerate from here" gesture: cancel and wait for quiescence
-    // before running, so an edit/retry of the just-sent message needs no prior
-    // manual stop and never races the abort convergence. A historical (closed)
-    // target never needs the live driver — the version child is rebuilt from
-    // the seeded prefix and the log below that boundary is append-only — so
-    // plan from a snapshot WITHOUT interrupting the running reply.
-    if (targetsOpenTail(operation, agent.session.snapshotEvents())) {
-      agent.cancel({ kind: 'user' })
-      await agent.whenIdle()
-      return await agent.runMaintenance(async () => job(agent))
-    }
-    return await job(agent)
+    // Everything after the edited input is discarded; settle the driver first.
+    agent.cancel({ kind: 'user' })
+    await agent.whenIdle()
+    return await agent.runMaintenance(async () => job(agent))
   } finally {
     await handle?.dispose()
   }
@@ -453,48 +205,6 @@ function inheritedSeed(source: Session, boundary: number): SessionEvent[] {
     throw new Error('分支边界不是连续会话事件。')
   }
   return events.slice(0, boundary + 1)
-}
-
-function appendLogSeedEvent<T extends Exclude<SessionEventType, SurfaceEventType>>(
-  events: SessionEvent[], type: T, data: SessionEvent<T>['data'],
-): void {
-  events.push({ type, seq: events.length, time: Date.now(), data } as SessionEvent<T>)
-}
-
-function appendSurfaceSeedEvent<T extends SurfaceEventType>(
-  events: SessionEvent[], type: T, data: SessionEvent<T>['data'], intent: SurfaceIntent,
-): void {
-  events.push({
-    type, seq: events.length, time: Date.now(), data,
-    surfaceOp: intent.surfaceOp,
-    ...(intent.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: intent.sourceEventSeqs }),
-    // The generic T widens the mapped event union, so TS cannot verify the
-    // overlap directly (0.1.5 added members that intersect to never).
-  } as unknown as SessionEvent<T>)
-}
-
-function appendManualTurn(events: SessionEvent[], manual: ManualAssistantTurn): void {
-  const { turn, user, assistant } = manual
-  appendLogSeedEvent(events, 'turn/start', { turn })
-  appendSurfaceSeedEvent(events, 'user/message', user, { surfaceOp: 'append' })
-  appendLogSeedEvent(events, 'step/start', { turn, step: 1 })
-  // 0.1.5 (session format V3): an assistant/message settlement now carries the
-  // stream records used to replay a LIVE attempt. A seeded historical turn has
-  // no live stream, and the seed validator only requires the field to be an
-  // array, so an empty one is correct here.
-  appendSurfaceSeedEvent(events, 'assistant/message', { turn, step: 1, message: assistant, stream: [] }, {
-    surfaceOp: 'append',
-    sourceEventSeqs: [],
-  })
-  appendLogSeedEvent(events, 'step/end', { turn, step: 1 })
-  appendLogSeedEvent(events, 'turn/end', { turn, reason: { kind: 'completed' } })
-}
-
-function versionSeed(source: Session, plan: OperationPlan): { events: SessionEvent[]; inheritedLength: number } {
-  const events = inheritedSeed(source, plan.boundary)
-  const inheritedLength = events.length
-  if (plan.manualTurn !== undefined) appendManualTurn(events, plan.manualTurn)
-  return { events, inheritedLength }
 }
 
 function sessionPreset(session: Session): string | undefined {
@@ -518,7 +228,7 @@ interface AgentPresetService {
 async function createVersionAgent(
   ctx: Context, source: Session, childId: SessionId, plan: OperationPlan, options: AgentOptions,
 ): Promise<AgentHandle> {
-  const seed = versionSeed(source, plan)
+  const events = inheritedSeed(source, plan.boundary)
   const presets = ctx.get('agentPresets') as AgentPresetService | undefined
   const presetId = sessionPreset(source)
   let agentPreset: string | undefined
@@ -530,8 +240,8 @@ async function createVersionAgent(
   }
   const child = await ctx.agents.create({
     sessionId: childId,
-    seed: seed.events,
-    inheritedEventCount: SessionLogOffset(seed.inheritedLength),
+    seed: events,
+    inheritedEventCount: SessionLogOffset(events.length),
     meta: {
       ...(source.header.cwd === undefined ? {} : { cwd: source.header.cwd }),
       parentSession: source.id,
@@ -566,38 +276,6 @@ async function recoverOperation(inverses: OperationInverse[]): Promise<void> {
     }
   }
   if (failures.length > 0) throw new AggregateError(failures, '版本操作恢复失败。')
-}
-
-// ── Version metadata store (outside the session log) ─────────────────────────
-function storePath(): string {
-  // USER-GLOBAL store: DSH_HOME when set, otherwise the default Harness home.
-  // Never process.cwd(): that is wherever the launcher happened to start dsh,
-  // so a launch from another directory would silently move the store and lose
-  // every version record (and pollute the checkout with a storages/ folder).
-  const home = process.env.DSH_HOME ?? join(homedir(), '.dsh')
-  return join(home, 'storages', 'dsh-edit-resend', 'versions.json')
-}
-
-function loadStore(): Record<string, VersionRecord> {
-  try {
-    const raw = readFileSync(storePath(), 'utf8')
-    const parsed = JSON.parse(raw) as Record<string, VersionRecord>
-    return typeof parsed === 'object' && parsed !== null ? parsed : {}
-  } catch {
-    return {}
-  }
-}
-
-function saveStore(store: Record<string, VersionRecord>): void {
-  const path = storePath()
-  mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, JSON.stringify(store, null, 2))
-}
-
-function rememberVersion(childId: SessionId, version: VersionRecord): void {
-  const store = loadStore()
-  store[childId] = version
-  saveStore(store)
 }
 
 interface SessionTitleService {
@@ -642,7 +320,6 @@ async function runOperation(ctx: Context, operation: EditResendOperation): Promi
       }
       for (const message of plan.queuedUsers) child.agent.followup(message)
 
-      rememberVersion(childId, plan.version)
       inverses.length = 0
       return { sessionId: childId, queuedTurns: plan.queuedUsers.length }
     } catch (error: unknown) {
@@ -675,131 +352,12 @@ async function finalizeEdit(ctx: Context, sourceId: SessionId, childId: SessionI
   }
 }
 
-// ── Timeline projection ──────────────────────────────────────────────────────
-function ownVersion(
-  header: { id: SessionId; parentSession?: SessionId; createdAt: number },
-  store: Record<string, VersionRecord>,
-): VersionRecord | undefined {
-  return store[header.id]
-}
-
-function flattenLineage(
-  root: SessionRecord, descendants: readonly SessionLineageNode[],
-): Array<{ record: SessionRecord; depth: number }> {
-  const result: Array<{ record: SessionRecord; depth: number }> = [{ record: root, depth: 0 }]
-  const visit = (nodes: readonly SessionLineageNode[], depth: number): void => {
-    const ordered = [...nodes].sort((left, right) => (
-      left.session.header.createdAt - right.session.header.createdAt
-      || String(left.session.header.id).localeCompare(String(right.session.header.id))
-    ))
-    for (const node of ordered) {
-      result.push({ record: node.session, depth })
-      visit(node.descendants, depth + 1)
-    }
-  }
-  visit(descendants, 1)
-  return result
-}
-
-/** Projection cache: one entry per viewed session, keyed by log-tail seq + version-store size. */
-const timelineCache = new Map<string, { lastSeq: number; storeSize: number; timeline: EditResendTimeline }>()
-
 async function timeline(ctx: Context, sessionId: SessionId): Promise<EditResendTimeline> {
-  const store = loadStore()
-  const storeSize = Object.keys(store).length
-
-  // Cheap in-memory events while the session is live in an agent (the common
-  // case during viewing) — avoids readSession's full-log clone + replay pass.
-  const liveEvents = ctx.agents.get(sessionId)?.session.snapshotEvents()
-  if (liveEvents !== undefined) {
-    const lastSeq = liveEvents.at(-1)?.seq ?? -1
-    const cached = timelineCache.get(sessionId)
-    if (cached !== undefined && cached.lastSeq === lastSeq && cached.storeSize === storeSize) {
-      return cached.timeline
-    }
-  }
-
-  const targetTrace = await ctx.sessionQuery.traceSession(sessionId)
-  const rootId = targetTrace.complete
-    ? targetTrace.root.header.id
-    : targetTrace.ancestors.at(-1)?.header.id ?? sessionId
-  const rootTrace = rootId === sessionId ? targetTrace : await ctx.sessionQuery.traceSession(rootId)
-  const lineage = flattenLineage(rootTrace.target, rootTrace.descendants)
-  const recordsById = new Map(lineage.map(({ record }) => [record.header.id, record]))
-  const currentPath = new Set<SessionId>()
-  let pathId: SessionId | undefined = sessionId
-  while (pathId !== undefined && !currentPath.has(pathId)) {
-    currentPath.add(pathId)
-    pathId = recordsById.get(pathId)?.header.parentSession
-  }
-
-  const versions: VersionSummary[] = lineage.map(({ record, depth }) => {
-    const header = record.header
-    const version = ownVersion(header, store)
-    return {
-      sessionId: header.id,
-      ...(header.parentSession === undefined ? {} : { parentSessionId: header.parentSession }),
-      ...(version === undefined ? {} : {
-        effectId: version.effect.id,
-        inverseSessionId: version.inverseSessionId,
-      }),
-      createdAt: version?.time ?? header.createdAt,
-      depth,
-      current: header.id === sessionId,
-      onCurrentEffectPath: currentPath.has(header.id),
-      ...(version === undefined ? {} : {
-        operation: version.effect.operation,
-        cascade: version.effect.cascade,
-        targetTurn: version.effect.targetTurn,
-        ...(version.effect.blockKind === undefined ? {} : { blockKind: version.effect.blockKind }),
-        ...(version.effect.before === undefined ? {} : { before: version.effect.before }),
-        ...(version.effect.after === undefined ? {} : { after: version.effect.after }),
-      }),
-    }
-  })
-
-  const effectIds = new Set<string>()
-  for (const version of versions) {
-    if (version.effectId === undefined) continue
-    if (effectIds.has(version.effectId)) throw new Error('版本效果重复。')
-    effectIds.add(version.effectId)
-  }
-
-  const versionsById = new Map(versions.map(version => [version.sessionId, version]))
-  const undoStack: string[] = []
-  let undoCursor = versionsById.get(sessionId)
-  while (undoCursor?.inverseSessionId !== undefined) {
-    const inverseId = undoCursor.inverseSessionId
-    if (undoStack.includes(inverseId)) throw new Error('版本效果逆链包含循环。')
-    if (!versionsById.has(inverseId)) throw new Error('恢复目标不在可见版本树中。')
-    undoStack.push(inverseId)
-    undoCursor = versionsById.get(inverseId)
-  }
-  const redoSessionIds = versions
-    .filter(version => version.inverseSessionId === sessionId)
-    .map(version => version.sessionId)
-
-  // Only the CURRENT session's events feed the editable projection; ancestor /
-  // descendant logs contribute headers (already in lineage), never their events.
-  const currentEvents: readonly SessionEvent[] = liveEvents
-    ?? (await ctx.sessionQuery.readSession(sessionId)).events
-  const { closed, open } = foldTurns(currentEvents)
-  const result: EditResendTimeline = {
-    sessionId,
-    messages: editableMessages(closed, open),
-    retryableTurns: retryableTurns(closed, open),
-    versions,
-    undoStack,
-    redoSessionIds,
-  }
-
-  const lastSeq = currentEvents.at(-1)?.seq ?? -1
-  if (timelineCache.size >= 64) {
-    const oldest = timelineCache.keys().next().value
-    if (oldest !== undefined) timelineCache.delete(oldest)
-  }
-  timelineCache.set(sessionId, { lastSeq, storeSize, timeline: result })
-  return result
+  const events = ctx.agents.get(sessionId)?.session.snapshotEvents() ?? await readEvents(ctx, sessionId)
+  const { closed, open } = foldTurns(events)
+  const users = editableMessages(closed, open).filter(message => message.kind === 'user')
+  const latestSeq = events.findLast(event => event.type === 'user/message' && event.data.source.kind === 'user')?.seq
+  return { sessionId, messages: users.filter(message => message.eventSeq === latestSeq) }
 }
 
 // ── Route decoding / encoding ────────────────────────────────────────────────
@@ -821,7 +379,7 @@ function integerOf(value: unknown, name: string): number {
 }
 
 function cascadeOf(value: unknown): CascadePolicy {
-  if (value !== 'truncate' && value !== 'preserve') throw new TypeError('cascade 必须是 truncate 或 preserve。')
+  if (value !== 'truncate') throw new TypeError('cascade 必须是 truncate 或 preserve。')
   return value
 }
 
@@ -839,10 +397,6 @@ function decodeOperation(value: unknown): EditResendOperation {
         text: record['text'],
         cascade: cascadeOf(record['cascade']),
       }
-    case 'reroll':
-      return { action: 'reroll', sessionId }
-    case 'retry':
-      return { action: 'retry', sessionId, turn: integerOf(record['turn'], 'turn'), cascade: cascadeOf(record['cascade']) }
     default:
       throw new TypeError('action 必须是 edit、reroll 或 retry。')
   }

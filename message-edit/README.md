@@ -26,7 +26,17 @@ npm run build
 npm test
 ```
 
-`link-types` links host types to the globally installed DSH, avoiding duplicate Cordis service identities. Set `DSH_PACKAGE_ROOT` if DSH is installed elsewhere. Tested against DSH 0.1.5-rc.2. That host release required a local `dsh-session-query` restore-validation fix for persisted branches; the fix replaces `Session.create(...)` validation in `dsh-session-query.readSession` with `Session.fromRestore(...)` using cloned events/header and the original inherited count. An upstream DSH upgrade may overwrite that host fix; verify branch reopening after upgrading.
+`link-types` links host types to the globally installed DSH, avoiding duplicate Cordis service identities. Set `DSH_PACKAGE_ROOT` if DSH is installed elsewhere. Tested against DSH 0.1.5-rc.2. The editor reads cold sessions through the public observation API; it does not patch DSH or depend on a patched `readSession`.
+
+The backend supports only editing the latest user text, preserving attachments and earlier turns. It uses a native fork and archives the previous session because DSH logs are append-only. It maintains no version tree, undo/redo state, or separate metadata store. Older archived sessions remain readable; existing metadata files are left untouched.
+
+For a persistence regression check against an independently installed, unmodified host:
+
+```sh
+DSH_TEST_PACKAGE_JSON=/path/to/clean-install/package.json node --experimental-strip-types test/persistence.test.mjs
+```
+
+The test uses a temporary session store and a fresh service context to check cold restoration. It never reads personal sessions.
 
 ## Credits
 

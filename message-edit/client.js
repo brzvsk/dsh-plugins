@@ -32,7 +32,7 @@ window.__ModuleLoader__.load({
 			return value;
 		}
 		function blockKind(value) {
-			if (value !== "user" && value !== "assistant.reasoning" && value !== "assistant.response") throw new TypeError("消息块类型无效");
+			if (value !== "user") throw new TypeError("消息块类型无效");
 			return value;
 		}
 		function decodeMessage(value, index) {
@@ -48,60 +48,15 @@ window.__ModuleLoader__.load({
 				...row["open"] === void 0 ? {} : { open: booleanValue(row["open"], "消息 open") }
 			};
 		}
-		function decodeRetryable(value, index) {
-			const row = objectValue(value, "retryableTurns[" + String(index) + "]");
-			return {
-				turn: numberValue(row["turn"], "回合 turn"),
-				userEventSeq: numberValue(row["userEventSeq"], "回合 userEventSeq"),
-				preview: stringValue(row["preview"], "回合 preview"),
-				time: numberValue(row["time"], "回合 time"),
-				...row["open"] === void 0 ? {} : { open: booleanValue(row["open"], "回合 open") }
-			};
-		}
-		function optionalOperation(value) {
-			if (value === void 0) return void 0;
-			if (value === "edit" || value === "reroll" || value === "retry") return value;
-			throw new TypeError("版本 operation 无效");
-		}
-		function decodeVersion(value, index) {
-			const row = objectValue(value, "versions[" + String(index) + "]");
-			const operation = optionalOperation(row["operation"]);
-			const cascade = row["cascade"];
-			if (cascade !== void 0 && cascade !== "truncate" && cascade !== "preserve") throw new TypeError("版本 cascade 无效");
-			const kind = row["blockKind"] === void 0 ? void 0 : blockKind(row["blockKind"]);
-			return {
-				sessionId: stringValue(row["sessionId"], "版本 sessionId"),
-				...row["parentSessionId"] === void 0 ? {} : { parentSessionId: stringValue(row["parentSessionId"], "版本 parentSessionId") },
-				...row["effectId"] === void 0 ? {} : { effectId: stringValue(row["effectId"], "版本 effectId") },
-				...row["inverseSessionId"] === void 0 ? {} : { inverseSessionId: stringValue(row["inverseSessionId"], "版本 inverseSessionId") },
-				createdAt: numberValue(row["createdAt"], "版本 createdAt"),
-				depth: numberValue(row["depth"], "版本 depth"),
-				current: booleanValue(row["current"], "版本 current"),
-				onCurrentEffectPath: booleanValue(row["onCurrentEffectPath"], "版本 onCurrentEffectPath"),
-				...operation === void 0 ? {} : { operation },
-				...cascade === void 0 ? {} : { cascade },
-				...row["targetTurn"] === void 0 ? {} : { targetTurn: numberValue(row["targetTurn"], "版本 targetTurn") },
-				...kind === void 0 ? {} : { blockKind: kind },
-				...row["before"] === void 0 ? {} : { before: stringValue(row["before"], "版本 before") },
-				...row["after"] === void 0 ? {} : { after: stringValue(row["after"], "版本 after") }
-			};
-		}
 		function arrayValue(value, label) {
 			if (!Array.isArray(value)) throw new TypeError(label + " 不是数组");
 			return value;
-		}
-		function stringArray(value, label) {
-			return arrayValue(value, label).map((item, index) => stringValue(item, label + "[" + String(index) + "]"));
 		}
 		function decodeTimeline(value) {
 			const data = objectValue(value, "Timeline 响应");
 			return {
 				sessionId: stringValue(data["sessionId"], "Timeline sessionId"),
-				messages: arrayValue(data["messages"], "Timeline messages").map(decodeMessage),
-				retryableTurns: arrayValue(data["retryableTurns"], "Timeline retryableTurns").map(decodeRetryable),
-				versions: arrayValue(data["versions"], "Timeline versions").map(decodeVersion),
-				undoStack: stringArray(data["undoStack"], "Timeline undoStack"),
-				redoSessionIds: stringArray(data["redoSessionIds"], "Timeline redoSessionIds")
+				messages: arrayValue(data["messages"], "Timeline messages").map(decodeMessage)
 			};
 		}
 		function decodeOperationResult(value) {
@@ -125,31 +80,6 @@ window.__ModuleLoader__.load({
 		function conversationRevision(snapshot) {
 			return (snapshot.running ? "R" : "r") + ":" + String(snapshot.queue.length);
 		}
-		function lineageRevision(snapshot, sessionId) {
-			let root = sessionId;
-			const ancestorIds = /* @__PURE__ */ new Set();
-			while (!ancestorIds.has(root)) {
-				ancestorIds.add(root);
-				const parent = snapshot.byId[root]?.parentId;
-				if (parent === void 0 || snapshot.byId[parent] === void 0) break;
-				root = parent;
-			}
-			const connected = [];
-			for (const rawId of Object.keys(snapshot.byId).sort()) {
-				const id = rawId;
-				const seen = /* @__PURE__ */ new Set();
-				let cursor = id;
-				while (cursor !== void 0 && !seen.has(cursor)) {
-					if (cursor === root) {
-						connected.push(id + ">" + (snapshot.byId[id]?.parentId ?? ""));
-						break;
-					}
-					seen.add(cursor);
-					cursor = snapshot.byId[cursor]?.parentId;
-				}
-			}
-			return connected.join("|");
-		}
 		var EditResendController = class {
 			sessionId;
 			store = (0, _deepseek_ai_dsh_client_store.createSnapshotStore)({
@@ -164,7 +94,6 @@ window.__ModuleLoader__.load({
 			sessionSource;
 			sessionSourceDispose;
 			sessionRevision;
-			listRevision = "";
 			refreshScheduled = false;
 			observing = false;
 			navigationWaits = /* @__PURE__ */ new Set();
@@ -183,32 +112,15 @@ window.__ModuleLoader__.load({
 						blockIndex: message.blockIndex,
 						text,
 						cascade
-					}),
-					retry: (turn, cascade) => this.mutate({
-						action: "retry",
-						sessionId: this.sessionId,
-						turn,
-						cascade
-					}),
-					reroll: () => this.mutate({
-						action: "reroll",
-						sessionId: this.sessionId
-					}),
-					openVersion: (sessionId) => this.openWhenListed(sessionId),
-					stop: () => this.stop()
+					})
 				};
 				ctx.effect(() => this.observeDependencies(), "edit-resend: observe " + sessionId);
 			}
 			observeDependencies() {
 				this.observing = true;
-				this.listRevision = lineageRevision(this.sessions.list.getSnapshot(), this.sessionId);
 				this.bindSessionSource();
 				const disposeList = this.sessions.list.subscribe(() => {
-					const rebound = this.bindSessionSource();
-					const nextRevision = lineageRevision(this.sessions.list.getSnapshot(), this.sessionId);
-					if (nextRevision === this.listRevision && !rebound) return;
-					this.listRevision = nextRevision;
-					this.invalidate();
+					if (this.bindSessionSource()) this.invalidate();
 				});
 				return () => {
 					this.observing = false;
@@ -309,16 +221,6 @@ window.__ModuleLoader__.load({
 					};
 				}
 			}
-			/** Cancel the in-flight reply via the session face (preserving the pending queue). */
-			async stop() {
-				const session = this.sessions.binding(this.sessionId)?.session;
-				if (session === void 0) return false;
-				try {
-					return (await session.cancel()).ok;
-				} catch {
-					return false;
-				}
-			}
 			openWhenListed(sessionId) {
 				if (this.sessions.list.getSnapshot().byId[sessionId] !== void 0) {
 					this.sessions.open(sessionId);
@@ -348,8 +250,8 @@ window.__ModuleLoader__.load({
 			}
 		};
 		//#endregion
-		//#region \0dsh-css:/Users/brzvsk/projects/dsh-plugins/message-edit/src/client/InlineEdit.module.css.mjs
-		const css = ".HYteGG_panel,.HYteGG_input,.HYteGG_footer,.HYteGG_actions,.HYteGG_save,.HYteGG_cancel,.HYteGG_iconButton{box-sizing:border-box}.HYteGG_iconButton{width:24px;height:24px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:6px;justify-content:center;align-items:center;padding:0;display:inline-flex}.HYteGG_iconButton:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.HYteGG_panel{background:var(--dsw-specific-bubble);width:100%;color:var(--dsw-alias-label-primary);border-radius:22px;flex-direction:column;gap:12px;padding:14px 16px;display:flex}.HYteGG_input{width:100%;min-height:44px;max-height:360px;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:var(--dsh-content-font-size,14px);line-height:calc(22px + var(--dsh-content-font-delta,0px));resize:none;background:0 0;border:none;border-radius:0;padding:0;overflow-y:auto}.HYteGG_input:focus{border-color:var(--dsw-alias-state-business-primary);outline:none}.HYteGG_footer{justify-content:flex-end;align-items:center;gap:12px;display:flex}.HYteGG_hint{color:var(--dsw-alias-label-caption);font-size:12px;line-height:18px}.HYteGG_actions{flex:none;align-items:center;gap:12px;display:flex}.HYteGG_save,.HYteGG_cancel{cursor:pointer;border-radius:17px;justify-content:center;align-items:center;height:34px;padding:0 16px;font-size:14px;line-height:20px;transition:background .15s;display:inline-flex}.HYteGG_save{background:var(--dsw-alias-button-primary-fill);min-width:92px;color:var(--dsw-alias-label-primary-foreground);border:none}.HYteGG_save:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover)}.HYteGG_save:disabled{opacity:.4;cursor:not-allowed}.HYteGG_cancel{border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary);background:0 0}.HYteGG_cancel:hover{background:var(--dsw-alias-interactive-bg-hover)}.HYteGG_error{background:var(--dsw-alias-interactive-bg-hover-danger);color:var(--dsw-alias-state-error-primary);border-radius:8px;margin:0;padding:8px 10px;font-size:12px;line-height:18px}";
+		//#region \0dsh-css:/private/tmp/dsh-message-edit-clean/message-edit/src/client/InlineEdit.module.css.mjs
+		const css = ".K9zO6G_panel,.K9zO6G_input,.K9zO6G_footer,.K9zO6G_actions,.K9zO6G_save,.K9zO6G_cancel,.K9zO6G_iconButton{box-sizing:border-box}.K9zO6G_iconButton{width:24px;height:24px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:6px;justify-content:center;align-items:center;padding:0;display:inline-flex}.K9zO6G_iconButton:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.K9zO6G_panel{background:var(--dsw-specific-bubble);width:100%;color:var(--dsw-alias-label-primary);border-radius:22px;flex-direction:column;gap:12px;padding:14px 16px;display:flex}.K9zO6G_input{width:100%;min-height:44px;max-height:360px;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:var(--dsh-content-font-size,14px);line-height:calc(22px + var(--dsh-content-font-delta,0px));resize:none;background:0 0;border:none;border-radius:0;padding:0;overflow-y:auto}.K9zO6G_input:focus{border-color:var(--dsw-alias-state-business-primary);outline:none}.K9zO6G_footer{justify-content:flex-end;align-items:center;gap:12px;display:flex}.K9zO6G_hint{color:var(--dsw-alias-label-caption);font-size:12px;line-height:18px}.K9zO6G_actions{flex:none;align-items:center;gap:12px;display:flex}.K9zO6G_save,.K9zO6G_cancel{cursor:pointer;border-radius:17px;justify-content:center;align-items:center;height:34px;padding:0 16px;font-size:14px;line-height:20px;transition:background .15s;display:inline-flex}.K9zO6G_save{background:var(--dsw-alias-button-primary-fill);min-width:92px;color:var(--dsw-alias-label-primary-foreground);border:none}.K9zO6G_save:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover)}.K9zO6G_save:disabled{opacity:.4;cursor:not-allowed}.K9zO6G_cancel{border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary);background:0 0}.K9zO6G_cancel:hover{background:var(--dsw-alias-interactive-bg-hover)}.K9zO6G_error{background:var(--dsw-alias-interactive-bg-hover-danger);color:var(--dsw-alias-state-error-primary);border-radius:8px;margin:0;padding:8px 10px;font-size:12px;line-height:18px}";
 		const tagId = "dsh-message-edit-local/InlineEdit.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
@@ -359,15 +261,15 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var InlineEdit_module_css_default = {
-			"panel": "HYteGG_panel",
-			"hint": "HYteGG_hint",
-			"iconButton": "HYteGG_iconButton",
-			"actions": "HYteGG_actions",
-			"footer": "HYteGG_footer",
-			"input": "HYteGG_input",
-			"save": "HYteGG_save",
-			"cancel": "HYteGG_cancel",
-			"error": "HYteGG_error"
+			"input": "K9zO6G_input",
+			"actions": "K9zO6G_actions",
+			"save": "K9zO6G_save",
+			"error": "K9zO6G_error",
+			"cancel": "K9zO6G_cancel",
+			"hint": "K9zO6G_hint",
+			"footer": "K9zO6G_footer",
+			"iconButton": "K9zO6G_iconButton",
+			"panel": "K9zO6G_panel"
 		};
 		//#endregion
 		//#region src/client/i18n.ts
