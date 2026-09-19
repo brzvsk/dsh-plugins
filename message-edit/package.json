@@ -1,7 +1,7 @@
 {
   "name": "dsh-message-edit-local",
   "version": "0.1.0",
-  "description": "DSH plugin: edit already-sent messages and resend (stop an in-flight reply, edit, resend), plus branch-based edit/reroll/retry and a version timeline.",
+  "description": "Edit only the last user message in DSH, with native button styling and interface-language translations.",
   "type": "module",
   "main": "./index.mjs",
   "exports": {
@@ -36,7 +36,8 @@
   "scripts": {
     "build": "node ./scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json",
-    "link-types": "node ./scripts/link-types.mjs"
+    "link-types": "node ./scripts/link-types.mjs",
+    "test": "node --experimental-strip-types test/logic.test.ts"
   },
   "license": "MIT",
   "keywords": [
@@ -44,10 +45,7 @@
     "dsh",
     "plugin",
     "message-edit",
-    "resend",
-    "reroll",
-    "retry",
-    "timeline"
+    "resend"
   ],
   "devDependencies": {
     "@deepseek-ai/dsh-client-store": "^0.1.5-rc.2",
@@ -60,5 +58,13 @@
     "tsdown": "^0.22.2",
     "tsx": "^4.19.0",
     "typescript": "^6.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brzvsk/dsh-plugins.git",
+    "directory": "message-edit"
+  },
+  "engines": {
+    "node": ">=22.18"
   }
 }

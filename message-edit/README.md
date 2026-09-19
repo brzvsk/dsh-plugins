@@ -11,7 +11,7 @@ A minimal local plugin for DeepSeek Harness: edit only the latest user message a
 ## Install locally
 
 ```sh
-dsh plugin --profile cockpit add -w link:/absolute/path/to/dsh-plugins/message-edit
+dsh plugin --profile <profile> add -w link:/absolute/path/to/dsh-plugins/message-edit
 ```
 
 Remove `dsh-edit-resend` from that profile before enabling this replacement; both own the same backend route. Restart DSH after changing plugins.
@@ -22,7 +22,7 @@ Remove `dsh-edit-resend` from that profile before enabling this replacement; bot
 npm ci --ignore-scripts
 npm run link-types
 npm run build
-node --experimental-strip-types test/logic.test.ts
+npm test
 ```
 
 `link-types` links host types to the globally installed DSH, avoiding duplicate Cordis service identities. Set `DSH_PACKAGE_ROOT` if DSH is installed elsewhere. Tested against DSH 0.1.5-rc.2. That host release required a local `dsh-session-query` restore-validation fix for persisted branches; the fix replaces `Session.create(...)` validation in `dsh-session-query.readSession` with `Session.fromRestore(...)` using cloned events/header and the original inherited count. An upstream DSH upgrade may overwrite that host fix; verify branch reopening after upgrading.

@@ -5,7 +5,7 @@
  * the body runs inside the factory with local `module`/`exports` and returns
  * `module.exports` — the exact shape shipped client bundles use.
  */
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, unlinkSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -26,4 +26,5 @@ const bundle = [
 ].join('\n')
 
 writeFileSync(join(root, 'lib', 'client.js'), bundle)
+unlinkSync(join(root, 'lib', 'client.cjs'))
 console.log('lib/client.js written (__ModuleLoader__ bundle)')

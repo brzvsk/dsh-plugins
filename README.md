@@ -1,51 +1,52 @@
-# dsh-plugins
+# Small plugins for DeepSeek Harness
 
-Out-of-tree plugins for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh).
-Each subdirectory is one installable plugin **bundle** (`dsh.bundle.patch` + its own `cordis.patch.yml`),
-so `dsh plugin --profile <name> add <pkg>` registers it as a profile layer automatically.
+A personal collection of small [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugins. Built for my own daily use and shared for anyone who finds them useful.
+
+Each folder is a separate plugin. Install only the ones you want.
 
 ## Plugins
 
-| Plugin | npm | What it does |
-|---|---|---|
-| [message-edit](message-edit/) | Local build | Edit only the last user message; native styling and interface-language translations |
-| [visualize](visualize/) | [dsh-visualize](https://www.npmjs.com/package/dsh-visualize) | `visualize_html` tool + sandboxed HTML preview card in the Web chat (Codex `/vizualize` analogue) |
+| Plugin | What it adds | Availability |
+| --- | --- | --- |
+| [Visualize](visualize/) | Interactive HTML previews inside the conversation, with a `/visualize` command | [npm: dsh-visualize](https://www.npmjs.com/package/dsh-visualize), v0.2.1 |
+| [Message Edit](message-edit/) | One pencil button to edit the last user message and replace its reply; follows the interface language | Install from this checkout; tested on DSH 0.1.5-rc.2, with a host compatibility fix described in its README |
 
-## Install (published npm package)
+[Model Effort](model-effort/) is an experimental, unpublished model/effort selector for an older DSH API. It is kept as source material, not a recommended install.
 
-```sh
-# the profile is a pnpm workspace root, so -w is required
-dsh plugin --profile <name> add -w dsh-visualize
-```
+DSH's plugin APIs change between releases. A successful install does not establish runtime compatibility; check each plugin's README before using it.
 
-Then restart the profile (the shipped web surface disables HMR, so layer changes
-are not picked up live):
+## Install
+
+For Visualize from npm:
 
 ```sh
-dsh --profile cockpit --port 3081
+dsh plugin --profile <profile> add -w dsh-visualize
 ```
 
-## Local development (link, live rebuilds)
+For a plugin from this repository:
 
 ```sh
-dsh plugin --profile <name> add -w link:/path/to/dsh-plugins/visualize
-pnpm install           # from the repo root (pnpm workspace)
-pnpm --filter dsh-visualize build     # after edits; refresh the browser page
+git clone https://github.com/brzvsk/dsh-plugins.git
+cd dsh-plugins
+dsh plugin --profile <profile> add -w "link:$PWD/message-edit"
 ```
 
-## Adding a new plugin
+Replace `<profile>` with your DSH profile. Restart DSH after adding or removing a plugin. Ready-to-load bundles are included in Git, so linking a checkout does not require a build first.
 
-1. Create `<name>/` with a `package.json` declaring
-   `"dsh": { "bundle": { "patch": "./cordis.patch.yml" } }` and a
-   `cordis.patch.yml` that inserts your rows (the workspace glob
-   `packages: ['*']` picks the directory up automatically).
-2. For a Web UI half, add `dsh.client` (platform `web`, inject list) and an
-   `exports["./client"]` bundle in the
-   `window.__ModuleLoader__.load({ id, factory })` format
-   (see `visualize/scripts/build-client.mjs`).
-3. `pnpm install`, build, test, then
-   `dsh plugin --profile <name> add -w <pkg>`.
+To remove a plugin:
 
-## License
+```sh
+dsh plugin --profile <profile> remove -w dsh-message-edit-local
+```
 
-MIT
+## Development
+
+Source, build instructions, limitations, and credits live in each plugin directory. Visualize uses the root pnpm workspace; Message Edit currently has its own npm lockfile and build setup. Follow the plugin's README rather than mixing package managers in the same directory.
+
+The repository keeps runtime bundles needed for direct installation. Dependencies, logs, caches, intermediate build files, local profiles, and credentials do not belong in Git.
+
+See [AGENTS.md](AGENTS.md) for maintenance conventions. Small fixes and focused additions are welcome; this is a collection of independent plugins, not a framework.
+
+## License and credits
+
+MIT. Each plugin retains its applicable license and attribution. Message Edit is adapted from mbj733/dsh-edit-resend and Moeblack/dsh-message-edit; see its [credits](message-edit/README.md#credits).
