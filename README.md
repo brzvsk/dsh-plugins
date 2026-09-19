@@ -11,6 +11,7 @@ Each folder is a separate plugin. Install only the ones you want.
 | [Visualize](visualize/) | Interactive HTML previews inside the conversation, with a `/visualize` command | [npm: dsh-visualize](https://www.npmjs.com/package/dsh-visualize), v0.2.1 |
 | [Message Edit](message-edit/) | One pencil button to edit the last user message and replace its reply; follows the interface language | Install from this checkout; tested on clean DSH 0.1.5-rc.2 |
 | [Usage Line](usage-line/) | Estimated session cost in the native composer stats row; reuses Token Usage accounting | Install from this checkout; DSH 0.1.5-rc.2 |
+| [Play Continue](play-continue/) | Manual continuation after an interrupted turn, in the native Send position | Install from this checkout; DSH 0.1.5-rc.2 |
 
 DSH's plugin APIs change between releases. A successful install does not establish runtime compatibility; check each plugin's README before using it.
 

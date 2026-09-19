@@ -1,0 +1,14 @@
+{
+  "name": "dsh-play-continue",
+  "version": "0.1.0",
+  "description": "Manual Play continuation for interrupted DSH conversations, in the native Send position.",
+  "type": "module",
+  "license": "MIT",
+  "exports": {".": "./index.mjs", "./client": "./client.js", "./package.json": "./package.json"},
+  "files": ["index.mjs", "client.js", "cordis.patch.yml", "README.md", "LICENSE"],
+  "dsh": {"bundle": {"patch": "./cordis.patch.yml"}, "client": {"platform": "web", "inject": ["@deepseek-ai/dsh-client-ui-conversation", "@deepseek-ai/dsh-api-session-controller", "@deepseek-ai/dsh-client-locale"]}},
+  "scripts": {"build": "node build.mjs", "test": "node --test test/*.test.mjs"},
+  "devDependencies": {"jsdom": "26.1.0"},
+  "engines": {"node": ">=22.19"},
+  "repository": {"type": "git", "url": "git+https://github.com/brzvsk/dsh-plugins.git", "directory": "play-continue"}
+}
