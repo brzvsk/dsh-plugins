@@ -2,8 +2,9 @@
 
 Estimated session cost as a third pill in the native composer stats row: `≈ $0.52`.
 No conversation tab, header counters or extra dashboard. Includes the active session
-and its subagent descendants. Updates every five seconds; hover or focus for the
-estimate explanation. `*` means some models have no price and are excluded;
+and its subagent descendants. Updates every five seconds. Click the native-style
+cost button for a matching popover with the total and per-model USD costs. Escape
+or clicking outside closes it; hover or focus gives the estimate explanation. `*` means some models have no price and are excluded;
 `$—` means the current cost could not be loaded. Small nonzero amounts show `<$0.01`.
 
 ## Install
@@ -46,7 +47,8 @@ transpiler dependencies. DSH provides React at runtime. Tests cover conversion,
 subagent scope, late stats mounting, host re-renders, unmount races and invalid
 responses. The native stats row currently has no extension slot: a hidden composer
 dock component attaches one owned node to the nearest `data-composer-stats` row.
-It removes that node and cancels polling on unmount. No global CSS or core edits.
+It removes that node and cancels polling on unmount. The button and popover reuse the loaded DSH StatsPills and stat-dialog CSS classes,
+including native theme colors and hover states. No global CSS or core edits.
 
 ## Credits
 

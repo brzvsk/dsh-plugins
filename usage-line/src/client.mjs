@@ -44,21 +44,78 @@ export function findStats(anchor) {
 
 export function mount(anchor, {sessionId, rows, language, fetcher = fetch, interval = 5000}) {
   const doc = anchor.ownerDocument, win = doc.defaultView;
-  const pill = doc.createElement('span');
+  const pill = doc.createElement('button');
+  pill.type = 'button';
   pill.dataset.usageLine = sessionId;
   pill.tabIndex = 0;
-  pill.setAttribute('role', 'status');
+  pill.setAttribute('aria-haspopup', 'dialog');
+  pill.setAttribute('aria-expanded', 'false');
+  const label = doc.createElement('span');
+  const icon = () => {
+    const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 16 16');
+    svg.setAttribute('width', '14'); svg.setAttribute('height', '14');
+    svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '1.25'); svg.setAttribute('aria-hidden', 'true');
+    const path = doc.createElementNS(svg.namespaceURI, 'path');
+    path.setAttribute('d', 'M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM10 5.5C9.4 4.3 6 4.5 6 6c0 2 4 1 4 3s-3.4 1.7-4 1M8 3.5v9');
+    svg.append(path); return svg;
+  };
+  pill.append(icon(), label);
   // Native StatsPills has no extension slot. Attach one owned node; never
   // change React-owned children, text, inline styles or the host's layout.
-  pill.style.cssText = 'display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font:inherit;color:inherit;padding:1px 8px;border-radius:24px;';
+  // Inherit the native button class without overriding its foreground color.
+  const dialogStyle = doc.querySelector('style[data-plugin-css$="/stat-dialog.module.css"]');
+  const prefix = dialogStyle?.textContent.match(/\.([\w-]+)_panel\{/u)?.[1];
+  const panel = doc.createElement('div');
+  panel.setAttribute('role', 'dialog');
+  panel.dataset.usageLineDialog = sessionId;
+  panel.className = prefix ? prefix + '_panel' : '';
+  panel.style.maxHeight = 'calc(100vh - 24px)';
+  panel.style.overflowY = 'auto';
+  let summary = null;
+  const titleText = () => language().startsWith('ru') ? 'Стоимость' : language().startsWith('zh') ? '费用' : 'Cost';
+  const position = () => {
+    if (!panel.isConnected) return;
+    const rect = pill.getBoundingClientRect(), bounds = panel.getBoundingClientRect();
+    panel.style.left = Math.max(12, Math.min(rect.left, win.innerWidth - bounds.width - 12)) + 'px';
+    panel.style.top = Math.max(12, rect.top - bounds.height - 8) + 'px';
+  };
+  const close = () => { panel.remove(); pill.setAttribute('aria-expanded', 'false'); };
+  const renderPanel = () => {
+    const element = (tag, cls, text) => {
+      const node = doc.createElement(tag); if (prefix) node.className = prefix + '_' + cls;
+      if (text !== undefined) node.textContent = text; return node;
+    };
+    panel.setAttribute('aria-label', titleText());
+    const title = element('div', 'title');
+    const name = element('span', 'titleLabel'); name.append(icon(), doc.createTextNode(titleText()));
+    title.append(name, element('span', 'titleValue', view.text));
+    const details = element('dl', 'details');
+    for (const row of summary?.byModel ?? []) {
+      const amount = summary.unpricedModels.includes(row.model) ? '—' : '$' + (row.cost / summary.usdExchangeRate).toFixed(4);
+      details.append(element('dt', 'route', row.model), element('dd', '', amount));
+    }
+    if (!summary) details.append(element('dt', '', view.title));
+    panel.replaceChildren(title, element('div', 'titleRule'), details);
+    panel.title = view.title; position();
+  };
+  pill.addEventListener('click', () => {
+    if (panel.isConnected) { close(); return; }
+    renderPanel(); doc.body.append(panel); pill.setAttribute('aria-expanded', 'true'); position();
+  });
+  const outside = event => { if (!pill.contains(event.target) && !panel.contains(event.target)) close(); };
+  const escape = event => { if (event.key === 'Escape' && panel.isConnected) { close(); pill.focus(); } };
+  doc.addEventListener('pointerdown', outside); doc.addEventListener('keydown', escape);
+  win.addEventListener('resize', position); win.addEventListener('scroll', position, true);
   let view = {text: '≈ $…', title: 'Loading cost'}, stopped = false, controller, timer;
   const attach = () => {
     if (stopped || !anchor.isConnected) return;
     const row = findStats(anchor);
-    if (!row) { pill.remove(); return; }
-    const native = row.querySelector('button');
+    if (!row) { close(); pill.remove(); return; }
+    const native = row.querySelector('button:not([data-usage-line])');
     if (native && pill.className !== native.className) pill.className = native.className;
-    if (pill.textContent !== view.text) pill.textContent = view.text;
+    if (label.textContent !== view.text) label.textContent = view.text;
     if (pill.title !== view.title) { pill.title = view.title; pill.setAttribute('aria-label', view.title); }
     if (pill.parentElement !== row) row.append(pill);
   };
@@ -69,24 +126,28 @@ export function mount(anchor, {sessionId, rows, language, fetcher = fetch, inter
     const timeout = win.setTimeout(() => controller.abort(), 10000);
     try {
       const ids = scopeIds(rows(), sessionId);
-      const query = new URLSearchParams({fields: 'chip'});
+      const query = new URLSearchParams({fields: 'session'});
       ids.forEach(id => query.append('sessionId', id));
       const response = await fetcher('/token-usage/stats?' + query, {signal: controller.signal, headers: {accept: 'application/json'}, credentials: 'same-origin'});
       if (!response.ok) throw new Error('HTTP ' + response.status);
-      const summary = await response.json();
-      if (summary.scope !== 'session' || !Array.isArray(summary.sessionIds) ||
-          [...summary.sessionIds].sort().join('\n') !== ids.join('\n')) throw new Error('Wrong session scope');
-      if (!stopped) view = display(summary, language());
+      const payload = await response.json();
+      if (payload.scope !== 'session' || !Array.isArray(payload.sessionIds) ||
+          [...payload.sessionIds].sort().join('\n') !== ids.join('\n')) throw new Error('Wrong session scope');
+      if (!stopped) {
+        view = display(payload, language());
+        if (!Array.isArray(payload.byModel) || payload.byModel.some(row => typeof row.model !== 'string' || !Number.isFinite(row.cost) || row.cost < 0)) throw new Error('Invalid cost breakdown');
+        summary = payload;
+      }
     } catch {
-      if (!stopped) view = {text: '≈ $—', title: language().startsWith('ru') ? 'Стоимость временно недоступна' : 'Cost temporarily unavailable'};
+      if (!stopped) { summary = null; view = {text: '≈ $—', title: language().startsWith('ru') ? 'Стоимость временно недоступна' : 'Cost temporarily unavailable'}; }
     } finally {
       win.clearTimeout(timeout);
-      if (!stopped) { attach(); timer = win.setTimeout(refresh, interval); }
+      if (!stopped) { attach(); if (panel.isConnected) renderPanel(); timer = win.setTimeout(refresh, interval); }
     }
   };
   attach();
   refresh();
-  return () => { stopped = true; controller?.abort(); win.clearTimeout(timer); observer.disconnect(); pill.remove(); };
+  return () => { stopped = true; controller?.abort(); win.clearTimeout(timer); observer.disconnect(); close(); pill.remove(); doc.removeEventListener('pointerdown', outside); doc.removeEventListener('keydown', escape); win.removeEventListener('resize', position); win.removeEventListener('scroll', position, true); };
 }
 
 export const inject = ['slots', 'sessions', 'locale'];

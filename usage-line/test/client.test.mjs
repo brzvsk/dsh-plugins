@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {display, scopeIds, mount} from '../src/client.mjs';
 
-const summary = {scope: 'session', sessionIds: ['a'], totalCost: 3.64, usdExchangeRate: 7, unpricedModels: []};
+const summary = {scope: 'session', sessionIds: ['a'], totalCost: 3.64, usdExchangeRate: 7, unpricedModels: [], byModel: [{model:'deepseek-v4.1-flash',cost:3.64}]};
 const tick = () => new Promise(resolve => setTimeout(resolve, 20));
 test('USD conversion, sub-cent amounts, unknown pricing and invalid exchange rates', () => {
   assert.equal(display(summary).text, '≈ $0.52');
@@ -47,5 +47,23 @@ test('wrong session and failed requests never display a zero or previous cost', 
   const stop = mount(dom.window.document.querySelector('#anchor'), {sessionId:'b',rows:()=>({}),language:()=> 'ru',fetcher:async()=>({ok:true,json:async()=>summary})});
   await tick();
   assert.equal(dom.window.document.querySelector('[data-usage-line]').textContent,'≈ $—');
+  stop(); dom.window.close();
+});
+
+ test('native button styles and cost breakdown dialog; Escape and outside dismissal', async () => {
+  const dom = new JSDOM('<head><style data-plugin-css="host/stat-dialog.module.css">.native_panel{padding:16px}</style></head><body><main><div data-composer-stats><span><button class="native_pill">Tokens</button></span></div><span id="anchor"></span></main></body>');
+  const doc = dom.window.document;
+  const stop = mount(doc.querySelector('#anchor'), {sessionId:'a',rows:()=>({}),language:()=> 'en',fetcher:async()=>({ok:true,json:async()=>summary})});
+  await tick(); const pill = doc.querySelector('[data-usage-line]');
+  assert.equal(pill.tagName,'BUTTON'); assert.equal(pill.className,'native_pill');
+  assert.equal(pill.style.color,''); assert.ok(pill.querySelector('svg'));
+  pill.click();
+  const panel = doc.querySelector('[role=dialog]');
+  assert.equal(panel.className,'native_panel'); assert.match(panel.textContent,/deepseek-v4.1-flash/); assert.match(panel.textContent,/0.5200/);
+  assert.equal(pill.getAttribute('aria-expanded'),'true');
+  doc.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape'}));
+  assert.equal(doc.querySelector('[role=dialog]'),null);
+  pill.click(); doc.body.dispatchEvent(new dom.window.Event('pointerdown',{bubbles:true}));
+  assert.equal(doc.querySelector('[role=dialog]'),null);
   stop(); dom.window.close();
 });
