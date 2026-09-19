@@ -8,6 +8,7 @@ so `dsh plugin --profile <name> add <pkg>` registers it as a profile layer autom
 
 | Plugin | npm | What it does |
 |---|---|---|
+| [message-edit](message-edit/) | Local build | Edit only the last user message; native styling and interface-language translations |
 | [visualize](visualize/) | [dsh-visualize](https://www.npmjs.com/package/dsh-visualize) | `visualize_html` tool + sandboxed HTML preview card in the Web chat (Codex `/vizualize` analogue) |
 
 ## Install (published npm package)
