@@ -9,7 +9,7 @@ Each folder is a separate plugin. Install only the ones you want.
 | Plugin | What it adds | Availability |
 | --- | --- | --- |
 | [Visualize](visualize/) | Interactive HTML previews inside the conversation, with a `/visualize` command | [npm: dsh-visualize](https://www.npmjs.com/package/dsh-visualize), v0.2.1 |
-| [Message Edit](message-edit/) | One pencil button to edit the last user message and replace its reply; follows the interface language | Install from this checkout; tested on DSH 0.1.5-rc.2, with a host compatibility fix described in its README |
+| [Message Edit](message-edit/) | One pencil button to edit the last user message and replace its reply; follows the interface language | Install from this checkout; tested on clean DSH 0.1.5-rc.2 |
 
 DSH's plugin APIs change between releases. A successful install does not establish runtime compatibility; check each plugin's README before using it.
 
@@ -48,3 +48,7 @@ See [AGENTS.md](AGENTS.md) for maintenance conventions. Small fixes and focused 
 ## License and credits
 
 MIT. Each plugin retains its applicable license and attribution. Message Edit is adapted from mbj733/dsh-edit-resend and Moeblack/dsh-message-edit; see its [credits](message-edit/README.md#credits).
+
+## App launcher
+
+[Chrome launcher](apps/chrome-launcher/) opens DSH in its own Chrome profile and manages a persistent local server. Updates are staged separately from activation.
