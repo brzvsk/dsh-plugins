@@ -19,7 +19,8 @@ duplicate and stale clicks are rejected. Subagents remain under native parent co
 ## Stop shortcut
 
 Press Escape twice within 400 ms to invoke the native Stop action in the visible
-running top-level conversation. Single presses and held-key repeats do not stop
+running top-level conversation. The first press replaces the native Stop icon with
+`Esc` for 400 ms; timeout or the second press restores the icon. Single presses and held-key repeats do not stop
 it. The shortcut yields to menus, dialogs, IME composition and editable fields
 outside the composer. Ambiguous split views require focus in the target composer.
 The draft and queued messages retain the native Stop semantics. No automatic

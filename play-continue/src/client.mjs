@@ -3,15 +3,15 @@ export function empty(input, session) {
     session?.openState === 'open' && !session.running && !session.removed && !session.subagent &&
     !session.queue.length && !session.pendingSubmissions.length;
 }
-export function doubleEscape(win,{canStop,stop,onError,now=()=>performance.now()}) {
-  let last=null, pending=false, disposed=false;
-  const reset=()=>{last=null;};
+export function doubleEscape(win,{canStop,stop,onError,onArmed=()=>{},now=()=>performance.now()}) {
+  let last=null, pending=false, disposed=false, timer;
+  const reset=()=>{last=null;win.clearTimeout(timer);onArmed(false);};
   const key=async(event)=>{
     if(event.key!=='Escape'){reset();return;}
     if(event.repeat)return;
     if(event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || pending || !canStop()){reset();return;}
     const time=now();
-    if(last===null || time-last>400){last=time;return;}
+    if(last===null || time-last>400){reset();last=time;onArmed(true);timer=win.setTimeout(reset,400);return;}
     reset();pending=true;event.preventDefault();
     try{const result=await stop();if(result?.error)throw new Error(result.error.message ?? 'Stop failed.');}
     catch(error){if(!disposed)onError(error.message);}
@@ -19,7 +19,24 @@ export function doubleEscape(win,{canStop,stop,onError,now=()=>performance.now()
   };
   win.addEventListener('keydown',key);
   win.addEventListener('blur',reset);
-  return()=>{disposed=true;win.removeEventListener('keydown',key);win.removeEventListener('blur',reset);};
+  return()=>{disposed=true;reset();win.removeEventListener('keydown',key);win.removeEventListener('blur',reset);};
+}
+export function stopHint(anchor) {
+  let icon, display, label;
+  return armed=>{
+    if(icon){icon.style.display=display;icon=undefined;}
+    label?.remove();label=undefined;
+    if(!armed)return;
+    const card=anchor.closest('[data-composer-card]');
+    const style=anchor.ownerDocument.querySelector('style[data-plugin-css$="/InputBar.module.css"]');
+    const cls=style?.textContent.match(/\.([\w-]+_primary)\{/u)?.[1];
+    const button=cls && [...card?.querySelectorAll('button.'+cls) ?? []].find(node=>!node.disabled && node.querySelector('svg rect'));
+    if(!button)return;
+    icon=button.querySelector('svg');display=icon.style.display;icon.style.display='none';
+    label=anchor.ownerDocument.createElement('span');label.textContent='Esc';
+    label.style.cssText='font-size:11px;font-weight:500;line-height:16px;';
+    label.setAttribute('aria-hidden','true');label.dataset.stopEscHint='';button.append(label);
+  };
 }
 export function mount(anchor,{sessionId,input,session,language,fetcher=fetch}) {
   const doc=anchor.ownerDocument, win=doc.defaultView;
@@ -68,6 +85,7 @@ export function mount(anchor,{sessionId,input,session,language,fetcher=fetch}) {
   const offInput=input.state.subscribe(sync);
   const offSession=session.subscribe(()=>{sync();void refresh();});
   const offEscape=doubleEscape(win,{
+    onArmed:stopHint(anchor),
     canStop:()=>{
       const snapshot=session.getSnapshot();
       const card=anchor.closest('[data-composer-card]');

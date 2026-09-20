@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {status,continueTurn,apply} from '../index.mjs';
-import {empty,mount,doubleEscape} from '../src/client.mjs';
+import {empty,mount,doubleEscape,stopHint} from '../src/client.mjs';
 const end=(kind,turn=3)=>({type:'turn/end',data:{turn,reason:{kind}}});
 const store=value=>({getSnapshot:()=>value,subscribe(fn){this.listeners.add(fn);return()=>this.listeners.delete(fn);},listeners:new Set(),set(next){value=next;for(const fn of this.listeners)fn();}});
 const tick=()=>new Promise(resolve=>setTimeout(resolve,20));
@@ -70,4 +70,17 @@ test('double Escape reports cancellation failure',async()=>{
  const off=doubleEscape(dom.window,{canStop:()=>true,stop:async()=>({ok:false,error:{message:'offline'}}),onError:value=>{error=value;},now:()=>100});
  for(let n=0;n<2;n++)dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',cancelable:true}));
  await tick();assert.equal(error,'offline');off();dom.window.close();
+});
+
+test('first Escape shows Esc on native Stop and restores its icon after 400 ms',()=>{
+ const dom=new JSDOM('<style data-plugin-css="host/InputBar.module.css">.native_primary{display:grid}</style><div data-composer-card><span id="anchor"></span><button class="native_primary"><svg><rect /></svg></button></div>');
+ const win=dom.window,doc=win.document;let timeout,delay,calls=0;
+ win.setTimeout=(fn,ms)=>{timeout=fn;delay=ms;return 1;};win.clearTimeout=()=>{};
+ const button=doc.querySelector('button'),icon=doc.querySelector('svg');
+ const off=doubleEscape(win,{canStop:()=>true,stop:()=>{calls++;},onError:()=>{},onArmed:stopHint(doc.querySelector('#anchor'))});
+ const key=()=>win.dispatchEvent(new win.KeyboardEvent('keydown',{key:'Escape',cancelable:true}));
+ key();assert.equal(delay,400);assert.equal(button.textContent,'Esc');assert.equal(icon.style.display,'none');assert.equal(calls,0);
+ timeout();assert.equal(button.textContent,'');assert.equal(icon.style.display,'');assert.equal(calls,0);
+ key();key();assert.equal(calls,1);assert.equal(button.textContent,'');assert.equal(icon.style.display,'');
+ off();dom.window.close();
 });
