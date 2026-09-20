@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {status,continueTurn,apply} from '../index.mjs';
-import {empty,mount} from '../src/client.mjs';
+import {empty,mount,doubleEscape} from '../src/client.mjs';
 const end=(kind,turn=3)=>({type:'turn/end',data:{turn,reason:{kind}}});
 const store=value=>({getSnapshot:()=>value,subscribe(fn){this.listeners.add(fn);return()=>this.listeners.delete(fn);},listeners:new Set(),set(next){value=next;for(const fn of this.listeners)fn();}});
 const tick=()=>new Promise(resolve=>setTimeout(resolve,20));
@@ -50,4 +50,24 @@ test('Play occupies Send position, preserves draft, rejects double clicks, resto
 test('HTTP route rejects cross-origin continuation before resolving a session',async()=>{
   let route;apply({effect:fn=>fn(),webServer:{register:r=>{route=r;}},agents:{},sessionController:{}});
   let code;await route.handler({headers:{'sec-fetch-site':'cross-site'},method:'POST'},{writeHead:c=>{code=c;},end:()=>{}});assert.equal(code,403);
+});
+
+test('double Escape: interval, repeats, consumed keys, pending stop and teardown', async()=>{
+ const dom=new JSDOM('');const win=dom.window;let time=0,calls=0,allowed=true,finish;
+ const off=doubleEscape(win,{now:()=>time,canStop:()=>allowed,stop:()=>{calls++;return new Promise(r=>{finish=r;});},onError:()=>{}});
+ const key=(options={})=>{const e=new win.KeyboardEvent('keydown',{key:'Escape',cancelable:true,...options});win.dispatchEvent(e);return e;};
+ key();time=50;key({repeat:true});assert.equal(calls,0);
+ time=401;key();assert.equal(calls,0);time=600;assert.equal(key().defaultPrevented,true);assert.equal(calls,1);
+ key();key();assert.equal(calls,1);finish({ok:true});await tick();
+ allowed=false;key();allowed=true;time=700;key();assert.equal(calls,1);
+ const consumed=new win.KeyboardEvent('keydown',{key:'Escape',cancelable:true});consumed.preventDefault();win.dispatchEvent(consumed);
+ time=710;key();assert.equal(calls,1);
+ win.dispatchEvent(new win.Event('blur'));time=720;key();assert.equal(calls,1);
+ off();time=730;key();assert.equal(calls,1);dom.window.close();
+});
+test('double Escape reports cancellation failure',async()=>{
+ const dom=new JSDOM('');let error;
+ const off=doubleEscape(dom.window,{canStop:()=>true,stop:async()=>({ok:false,error:{message:'offline'}}),onError:value=>{error=value;},now:()=>100});
+ for(let n=0;n<2;n++)dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',cancelable:true}));
+ await tick();assert.equal(error,'offline');off();dom.window.close();
 });

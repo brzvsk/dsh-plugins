@@ -5,6 +5,24 @@ function empty(input, session) {
     session?.openState === 'open' && !session.running && !session.removed && !session.subagent &&
     !session.queue.length && !session.pendingSubmissions.length;
 }
+function doubleEscape(win,{canStop,stop,onError,now=()=>performance.now()}) {
+  let last=null, pending=false, disposed=false;
+  const reset=()=>{last=null;};
+  const key=async(event)=>{
+    if(event.key!=='Escape'){reset();return;}
+    if(event.repeat)return;
+    if(event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || pending || !canStop()){reset();return;}
+    const time=now();
+    if(last===null || time-last>400){last=time;return;}
+    reset();pending=true;event.preventDefault();
+    try{const result=await stop();if(result?.error)throw new Error(result.error.message ?? 'Stop failed.');}
+    catch(error){if(!disposed)onError(error.message);}
+    finally{pending=false;}
+  };
+  win.addEventListener('keydown',key);
+  win.addEventListener('blur',reset);
+  return()=>{disposed=true;win.removeEventListener('keydown',key);win.removeEventListener('blur',reset);};
+}
 function mount(anchor,{sessionId,input,session,language,fetcher=fetch}) {
   const doc=anchor.ownerDocument, win=doc.defaultView;
   const play=doc.createElement('button'); play.type='button'; play.dataset.playContinue=sessionId;
@@ -51,9 +69,23 @@ function mount(anchor,{sessionId,input,session,language,fetcher=fetch}) {
   observer.observe(doc.body,{childList:true,subtree:true});
   const offInput=input.state.subscribe(sync);
   const offSession=session.subscribe(()=>{sync();void refresh();});
+  const offEscape=doubleEscape(win,{
+    canStop:()=>{
+      const snapshot=session.getSnapshot();
+      const card=anchor.closest('[data-composer-card]');
+      if(!snapshot.running || snapshot.openState!=='open' || snapshot.removed || snapshot.subagent || !card?.getClientRects().length)return false;
+      const visible=selector=>[...doc.querySelectorAll(selector)].filter(node=>node.getClientRects().length);
+      if(visible('[role="dialog"], [role="menu"], [role="listbox"], [aria-modal="true"]').length)return false;
+      const focused=doc.activeElement;
+      if(focused?.closest('input, textarea, [contenteditable="true"]') && !card.contains(focused))return false;
+      return focused?.closest('[data-composer-card]')===card || visible('[data-composer-card]').length===1;
+    },
+    stop:()=>session.cancel(),
+    onError:message=>input.notify('error',message),
+  });
   const timer=win.setInterval(refresh,10000);
   void refresh();
-  return()=>{stopped=true;generation++;controller?.abort();win.clearInterval(timer);offInput();offSession();observer.disconnect();restore();};
+  return()=>{stopped=true;generation++;controller?.abort();win.clearInterval(timer);offInput();offSession();offEscape();observer.disconnect();restore();};
 }
 const inject=['slots','sessions','conversation','locale'];
 function apply(ctx){
